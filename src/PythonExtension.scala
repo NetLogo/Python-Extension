@@ -1,71 +1,132 @@
 package org.nlogo.py
-import java.io.File
 
-import jep.Jep
-import org.nlogo.api.{Argument, Context}
-import org.nlogo.core.Syntax
-import org.nlogo.{api, core}
+import java.io.{File, InputStreamReader, OutputStreamWriter}
+import java.lang.ProcessBuilder.Redirect
+import java.net.{ServerSocket, Socket}
+
+import org.nlogo.api
+import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, Workspace}
+import org.nlogo.core.{Dump, LogoList, Syntax, Token}
 
 object PythonExtension {
-  var jep: Jep = null
+  var pythonProcess: PythonSubprocess = _
 }
 
-class PythonExtension extends api.DefaultClassManager {
-  def load(manager: api.PrimitiveManager): Unit = {
-    manager.addPrimitive("initialize", Initialize)
-    manager.addPrimitive("run", Run)
-    manager.addPrimitive("runresult", RunResult)
+object PythonSubprocess {
+  val lenSize = 10
+  val typeSize = 1
+  val stmtMsg = 0
+  val exprMsg = 1
+
+  def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
+    val pyScript: String = new File(
+      new File(
+        PythonExtension.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).getPath
+      ).getParentFile,
+      "pyext.py"
+    ).toString
+    val port = findOpenPort
+    ws.getExtensionManager
+
+    val pb = new ProcessBuilder()
+      .command(pythonCmd, pyScript, port.toString)
+      .redirectOutput(Redirect.INHERIT)
+      .redirectError(Redirect.INHERIT)
+    val proc = pb.start()
+    Thread.sleep(500)
+    val socket = new Socket("localhost", port)
+    System.out.flush()
+    new PythonSubprocess(ws, proc, socket)
+  }
+
+  private def findOpenPort: Int = {
+    var testServer: ServerSocket = null
+    try {
+      testServer = new ServerSocket(0)
+      testServer.getLocalPort
+    } finally {
+      if (testServer != null) testServer.close()
+    }
   }
 }
 
-object Initialize extends api.Command {
+class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
+  val in = new InputStreamReader(socket.getInputStream)
+  val out = new OutputStreamWriter(socket.getOutputStream)
+
+  def exec(stmt: String): Unit = {
+    send(PythonSubprocess.stmtMsg, stmt)
+  }
+
+  def eval(expr: String): AnyRef = {
+    send(PythonSubprocess.exprMsg, expr)
+    val l = read(PythonSubprocess.lenSize).toInt
+    ws.readFromString(read(l))
+  }
+
+  private def send(msgType: Int, msg: String): Unit = {
+    val fullMsg = s"%0${PythonSubprocess.lenSize}d%d%s".format(msg.length, msgType, msg)
+    out.write(fullMsg)
+    out.flush()
+  }
+
+  private def read(bytes: Int): String = {
+    val sb = new StringBuilder
+    for (_ <- 0 until bytes) {
+      val nextChar = in.read()
+      System.out.flush()
+      if (nextChar == -1) {
+        throw new ExtensionException("Python process quit unexpectedly")
+      }
+      sb.append(nextChar.toChar)
+    }
+    sb.toString
+  }
+
+  def close(): Unit = {
+    socket.close()
+    proc.destroy()
+    proc.waitFor()
+  }
+}
+
+class PythonExtension extends api.DefaultClassManager {
+  override def load(manager: api.PrimitiveManager): Unit = {
+    manager.addPrimitive("setup", SetupPython)
+    manager.addPrimitive("run", Run)
+    manager.addPrimitive("runresult", RunResult)
+    manager.addPrimitive("set", Set)
+  }
+
+  override def unload(em: ExtensionManager): Unit = {
+    super.unload(em)
+    if (PythonExtension.pythonProcess != null) {
+      PythonExtension.pythonProcess.close()
+    }
+  }
+}
+
+object SetupPython extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(
     right = List(Syntax.StringType)
   )
 
   override def perform(args: Array[Argument], context: Context): Unit = {
-    if (PythonExtension.jep != null) {
-      PythonExtension.jep.close()
+    context.workspace.getModelDir
+    if (PythonExtension.pythonProcess != null) {
+      PythonExtension.pythonProcess.close()
     }
-
-    val slash = File.separator
-    val pythonHome = args(0).getString
-    System.setProperty(
-      "PYTHON_HOME",
-      pythonHome
-    )
-    System.setProperty(
-      "java.library.path",
-      new File(pythonHome + slash + "site-packages" + slash + "jep").toString + File.pathSeparator + System.getProperty("java.library.path")
-    )
-    val fieldSysPath = classOf[ClassLoader].getDeclaredField("sys_paths")
-    fieldSysPath.setAccessible(true)
-    fieldSysPath.set(null, null)
-
-    /*
-    val jepJar = new File(pythonHome + slash + "site-packages" + slash + "jep" + slash + "jep-3.7.0.jar")
-    println(jepJar)
-    println(jepJar.exists())
-    val cl = ClassLoader.getSystemClassLoader.asInstanceOf[URLClassLoader]
-    val addURL = cl.getClass.getDeclaredMethod("addURL", classOf[URL])
-    addURL.setAccessible(true)
-    addURL.invoke(cl, Array(jepJar.toURI.toURL))
-    */
-
-    //val cl = new URLClassLoader(Array(jepJar.toURI.toURL))
-    //val cls = cl.loadClass("jep.Jep")
-    PythonExtension.jep = new Jep(false)
+    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args(0).getString)
   }
 }
 
 object Run extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(
-    right = List(Syntax.StringType)
+    right = List(Syntax.StringType | Syntax.CodeBlockType)
   )
 
-  override def perform(args: Array[Argument], context: Context): Unit = {
-    PythonExtension.jep.eval(args(0).getString)
-  }
+  override def perform(args: Array[Argument], context: Context): Unit =
+    PythonExtension.pythonProcess.exec(args(0).getString)
 }
 
 object RunResult extends api.Reporter {
@@ -74,16 +135,19 @@ object RunResult extends api.Reporter {
     ret = Syntax.WildcardType
   )
 
-  def convert(x: AnyRef): AnyRef = x match {
-    case x: java.lang.Long => x.doubleValue(): java.lang.Double
-    case x: java.lang.Double => x
-    case s: String => s
-    case l: java.lang.Iterable[Object] => l.asScala
-    case x => x.getClass + " " + x.toString
+  override def report(args: Array[Argument], context: Context): AnyRef = {
+    PythonExtension.pythonProcess.eval(args(0).getString)
+  }
+}
+
+object Set extends api.Command {
+  override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
+  override def perform(args: Array[Argument], context: Context): Unit = {
+    PythonExtension.pythonProcess.exec(s"${args(0).getString} = ${convertToPython(args(1).get)}")
   }
 
-  override def report(args: Array[Argument], context: Context) = {
-    PythonExtension.jep.getValue(args(0).getString) match {
-    }
+  def convertToPython(x: AnyRef): String = x match {
+    case l: LogoList => "[" + l.map(convertToPython).mkString(", ") + "]"
+    case o => Dump.logoObject(o, readable = true, exporting = false)
   }
 }
