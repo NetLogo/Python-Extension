@@ -56,12 +56,13 @@ def to_bytes(s):
         return bytes(s)
 
 def logo_responder(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
         sock.bind(('localhost', port))
         sock.listen(0)
         conn, addr = sock.accept()
         buff = bytes()
-        with conn:
+        try:
             buff = ConnectionBuffer(conn)
             globs = {}
             locs = {}
@@ -82,6 +83,10 @@ def logo_responder(port):
                     typ = to_bytes(str(ERR_MSG))
                 l = to_bytes(str(len(result)).zfill(LEN_SIZE))
                 conn.sendall(l + typ + result)
+        finally:
+            conn.close()
+    finally:
+        sock.close()
 
 
 

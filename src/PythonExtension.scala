@@ -7,6 +7,7 @@ import java.net.{ServerSocket, Socket}
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, Workspace}
 import org.nlogo.core.{Dump, LogoList, Syntax, Token}
+import org.nlogo.workspace.AbstractWorkspace
 
 object PythonExtension {
   var pythonProcess: PythonSubprocess = _
@@ -40,7 +41,11 @@ object PythonSubprocess {
       .command(pythonCmd, pyScript, port.toString)
       .redirectOutput(Redirect.INHERIT)
       .redirectError(Redirect.INHERIT)
-    val proc = pb.start()
+    val proc = try {
+      pb.start()
+    } catch {
+      case _: IOException => throw new ExtensionException(s"Couldn't find Python executable: $pythonCmd")
+    }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
       Thread.sleep(10)
@@ -51,6 +56,8 @@ object PythonSubprocess {
         case e: SecurityException => throw new ExtensionException(e)
       }
     }
+    if (!proc.isAlive) throw new ExtensionException("Python process failed to start")
+
     new PythonSubprocess(ws, proc, socket)
   }
 
@@ -98,8 +105,13 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   private def read(bytes: Int): String = {
     val sb = new StringBuilder
     for (_ <- 0 until bytes) {
+      /* This can be used to prevent the UI from locking, but at a significant performance hit
+      while (!in.ready) {
+        ws.asInstanceOf[AbstractWorkspace].breathe()
+        ws.world.wait(1) // Prevent UI from locking up while we wait
+      }
+      */
       val nextChar = in.read()
-      System.out.flush()
       if (nextChar == -1) {
         throw new ExtensionException("Python process quit unexpectedly")
       }
