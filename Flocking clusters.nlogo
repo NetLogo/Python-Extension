@@ -8,9 +8,9 @@ turtles-own [
 to setup
   clear-all
   py:setup "python3"
-  py:run (word
-    "import numpy as np\n"
-    "import sklearn.cluster as cl\n"
+  (py:run
+    "import numpy as np"
+    "import sklearn.cluster as cl"
   )
   create-turtles population
     [ set color yellow - 2 + random 7  ;; random shades look nice
@@ -29,7 +29,7 @@ to go
   ;; animation, substitute the following line instead:
   ;;   ask turtles [ fd 1 ]
 
-  py:set "coords" map [ t -> [ list xcor ycor ] of t ] sort turtles
+  py:set "coords" map [ t -> [ (list xcor ycor dx dy) ] of t ] sort turtles
   py:set "eps" vision
 
   let clusters py:runresult "cl.dbscan(np.array(coords), eps)"

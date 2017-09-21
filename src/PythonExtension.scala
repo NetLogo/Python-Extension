@@ -1,6 +1,6 @@
 package org.nlogo.py
 
-import java.io.{File, InputStreamReader, OutputStreamWriter}
+import java.io.{File, IOException, InputStreamReader, OutputStreamWriter}
 import java.lang.ProcessBuilder.Redirect
 import java.net.{ServerSocket, Socket}
 
@@ -41,9 +41,16 @@ object PythonSubprocess {
       .redirectOutput(Redirect.INHERIT)
       .redirectError(Redirect.INHERIT)
     val proc = pb.start()
-    Thread.sleep(500)
-    val socket = new Socket("localhost", port)
-    System.out.flush()
+    var socket: Socket = null
+    while (socket == null && proc.isAlive) {
+      Thread.sleep(10)
+      try {
+        socket = new Socket("localhost", port)
+      } catch {
+        case _: IOException => // keep going
+        case e: SecurityException => throw new ExtensionException(e)
+      }
+    }
     new PythonSubprocess(ws, proc, socket)
   }
 
@@ -140,22 +147,21 @@ object SetupPython extends api.Command {
 
 object Run extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(
-    right = List(Syntax.StringType | Syntax.CodeBlockType)
+    right = List(Syntax.StringType | Syntax.RepeatableType)
   )
 
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.exec(args(0).getString)
+    PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
 }
 
 object RunResult extends api.Reporter {
   override def getSyntax: Syntax = Syntax.reporterSyntax(
-    right = List(Syntax.StringType),
+    right = List(Syntax.StringType | Syntax.RepeatableType),
     ret = Syntax.WildcardType
   )
 
-  override def report(args: Array[Argument], context: Context): AnyRef = {
-    PythonExtension.pythonProcess.eval(args(0).getString)
-  }
+  override def report(args: Array[Argument], context: Context): AnyRef =
+    PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n"))
 }
 
 object Set extends api.Command {
