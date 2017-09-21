@@ -7,8 +7,15 @@ import json
 
 LEN_SIZE = 10
 TYPE_SIZE = 1
+
+# In
 STMT_MSG = 0
 EXPR_MSG = 1
+
+# Out
+
+SUCC_MSG = 0
+ERR_MSG  = 1
 
 class ConnectionBuffer(object):
     def __init__(self, conn):
@@ -62,12 +69,20 @@ def logo_responder(port):
                 length = int(buff.get(LEN_SIZE))
                 msg_type = int(buff.get(TYPE_SIZE))
                 code = utf8(buff.get(length))
-                if msg_type == STMT_MSG:
-                    exec(code, globs, locs)
-                else:
-                    result = to_bytes(to_logo(eval(code, globs, locs)))
-                    prefix = to_bytes(str(len(result)).zfill(LEN_SIZE))
-                    conn.sendall(prefix + result)
+                try:
+                    if msg_type == STMT_MSG:
+                        exec(code, globs, locs)
+                        result = to_bytes('')
+                        typ = to_bytes(str(SUCC_MSG))
+                    else:
+                        result = to_bytes(to_logo(eval(code, globs, locs)))
+                        typ = to_bytes(str(SUCC_MSG))
+                except BaseException as e:
+                    result = to_bytes(str(e))
+                    typ = to_bytes(str(ERR_MSG))
+                l = to_bytes(str(len(result)).zfill(LEN_SIZE))
+                conn.sendall(l + typ + result)
+
 
 
 def conn_iter(conn):

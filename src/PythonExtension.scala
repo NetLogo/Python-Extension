@@ -13,10 +13,18 @@ object PythonExtension {
 }
 
 object PythonSubprocess {
+  // In and out
   val lenSize = 10
   val typeSize = 1
+
+  // Out types
   val stmtMsg = 0
   val exprMsg = 1
+
+  // In types
+  val successMsg = 0
+  val errorMsg = 1
+
 
   def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
     val pyScript: String = new File(
@@ -56,12 +64,22 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
 
   def exec(stmt: String): Unit = {
     send(PythonSubprocess.stmtMsg, stmt)
+    val l = read(PythonSubprocess.lenSize).toInt
+    val t = read(PythonSubprocess.typeSize).toInt
+    val r = read(l)
+    if (t != 0)
+      throw new ExtensionException(r)
   }
 
   def eval(expr: String): AnyRef = {
     send(PythonSubprocess.exprMsg, expr)
     val l = read(PythonSubprocess.lenSize).toInt
-    ws.readFromString(read(l))
+    val t = read(PythonSubprocess.typeSize).toInt
+    val r = read(l)
+    if (t == 0)
+      ws.readFromString(r)
+    else
+      throw new ExtensionException(r)
   }
 
   private def send(msgType: Int, msg: String): Unit = {
