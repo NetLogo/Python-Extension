@@ -1,6 +1,6 @@
 extensions [ py ]
 
-globals [ max-sheep ss ws gs ]  ; don't let sheep population grow too large
+globals [ max-sheep sheep-data wolf-data grass-data ]  ; don't let sheep population grow too large
 ; Sheep and wolves are both breeds of turtle.
 breed [ sheep a-sheep ]  ; sheep is its own plural, so we use "a-sheep" as the singular.
 breed [ wolves wolf ]
@@ -54,9 +54,9 @@ to setup
     set energy random (2 * wolf-gain-from-food)
     setxy random-xcor random-ycor
   ]
-  set ss []
-  set ws []
-  set gs []
+  set sheep-data []
+  set wolf-data []
+  set grass-data []
   display-labels
   update-stats
   reset-ticks
@@ -91,23 +91,22 @@ to go
 end
 
 to update-stats
-  set ss lput count sheep ss
-  set ws lput count wolves ws
-  set gs lput count grass gs
+  set sheep-data lput count sheep sheep-data
+  set wolf-data lput count wolves wolf-data
+  set grass-data lput count grass grass-data
 end
 
-
-to show-plot
-  py:set "s" ss
-  py:set "w" ws
-  py:set "g" gs
+to show-pyplot
+  py:set "s" sheep-data
+  py:set "w" wolf-data
+  py:set "g" grass-data
   (py:run
     "fig = plt.figure()"
     "ax = fig.add_subplot(111, projection='3d')"
-    "ax.plot(s, w, g)"
-    "plt.xlabel('sheep')"
-    "plt.ylabel('wolves')"
-    ;"plt.zlabel('grass')"
+    "ax.plot(s,w,g)"
+    "ax.set_xlabel('sheep')"
+    "ax.set_ylabel('wolves')"
+    "ax.set_zlabel('grass')"
     "plt.show()"
   )
 end
@@ -294,7 +293,7 @@ wolf-reproduce
 wolf-reproduce
 0.0
 20.0
-5.0
+6.0
 1.0
 1
 %
@@ -444,12 +443,12 @@ model-version
 1
 
 BUTTON
-90
-545
-182
-578
+195
+140
+325
+173
 NIL
-show-plot
+show-pyplot
 NIL
 1
 T

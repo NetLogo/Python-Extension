@@ -41,6 +41,7 @@ object PythonSubprocess {
       .command(pythonCmd, pyScript, port.toString)
       .redirectOutput(Redirect.INHERIT)
       .redirectError(Redirect.INHERIT)
+      .directory(new File(ws.getModelDir))
     val proc = try {
       pb.start()
     } catch {
