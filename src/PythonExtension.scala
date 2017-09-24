@@ -1,13 +1,14 @@
 package org.nlogo.py
 
 import java.io.{File, IOException, InputStreamReader, OutputStreamWriter}
-import java.lang.ProcessBuilder.Redirect
 import java.net.{ServerSocket, Socket}
 
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, Workspace}
-import org.nlogo.core.{Dump, LogoList, Syntax, Token}
+import org.nlogo.core.{Dump, LogoList, Syntax}
 import org.nlogo.workspace.AbstractWorkspace
+
+import scala.collection.JavaConverters._
 
 object PythonExtension {
   var pythonProcess: PythonSubprocess = _
@@ -30,22 +31,26 @@ object PythonSubprocess {
   def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
     val pyScript: String = new File(
       new File(
-        PythonExtension.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).getPath
+        // Getting the path straight from the URL will leave, eg, '%20's in the place of spaces. Converting to URI first
+        // seems to prevent that.
+        PythonExtension.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
       ).getParentFile,
       "pyext.py"
     ).toString
+
     val port = findOpenPort
     ws.getExtensionManager
 
-    val pb = new ProcessBuilder()
-      .command(pythonCmd, pyScript, port.toString)
-      .redirectOutput(Redirect.INHERIT)
-      .redirectError(Redirect.INHERIT)
-      .directory(new File(ws.getModelDir))
+    val prefix = new File(ws.asInstanceOf[AbstractWorkspace].fileManager.prefix)
+    // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
+    // So we default to the home directory.
+    val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
+    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
-      case _: IOException => throw new ExtensionException(s"Couldn't find Python executable: $pythonCmd")
+      // TODO: Better error message here
+      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: ${pythonCmd}", e)
     }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
@@ -60,6 +65,21 @@ object PythonSubprocess {
     if (!proc.isAlive) throw new ExtensionException("Python process failed to start")
 
     new PythonSubprocess(ws, proc, socket)
+  }
+
+  private def cmd(pythonCmd: String, pythonScript: String, port: Int): List[String] = {
+    val os = System.getProperty("os.name").toLowerCase
+
+    val cmd = if (os.contains("mac") && System.getenv("PATH") == "/usr/bin:/bin:/usr/sbin:/sbin")
+      // On MacOS, .app files are executed with a neutered PATH environment variable. The problem is that if users are
+      // using Homebrew Python or similar, it won't be on that PATH. So, we check if we're on MacOS and if we have that
+      // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
+      // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
+      List("/bin/bash", "-c",
+        s"eval $$(/usr/libexec/path_helper -s) ; echo $$PATH ; '$pythonCmd' '$pythonScript' $port")
+    else
+      List(pythonCmd, pythonScript, port.toString)
+    cmd
   }
 
   private def findOpenPort: Int = {
