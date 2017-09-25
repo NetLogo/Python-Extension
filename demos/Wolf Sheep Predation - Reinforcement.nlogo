@@ -1,4 +1,4 @@
-extensions [ py table ]
+extensions [ py table profiler ]
 
 globals [
   max-sheep
@@ -6,7 +6,7 @@ globals [
 
   state-action-pairs
   rewards
-  next-state
+  next-states
 
   loss
 ]  ; don't let sheep population grow too large
@@ -18,6 +18,7 @@ turtles-own [ energy ]       ; both wolves and sheep have energy
 patches-own [ countdown ]
 
 sheep-own [
+  state
   action
 ]
 
@@ -36,15 +37,15 @@ to setup
   clear-all
 
   set inputs (list
-    [ -> any? (in-vision-at patches (- fov / 3)) with [ pcolor = green ] ]
-    [ -> any? (in-vision-at patches 0) with [ pcolor = green ] ]
-    [ -> any? (in-vision-at patches (fov / 3)) with [ pcolor = green ] ]
-    [ -> any? other (in-vision-at sheep (- fov / 3)) ]
-    [ -> any? other (in-vision-at sheep 0) ]
-    [ -> any? other (in-vision-at sheep (fov / 3)) ]
-    [ -> any? other (in-vision-at wolves (- fov / 3)) ]
-    [ -> any? other (in-vision-at wolves 0) ]
-    [ -> any? other (in-vision-at wolves (fov / 3)) ]
+    [ -> count (in-vision-at patches (- fov / 3)) with [ pcolor = green ] ]
+    [ -> count (in-vision-at patches 0) with [ pcolor = green ] ]
+    [ -> count (in-vision-at patches (fov / 3)) with [ pcolor = green ] ]
+    [ -> count other (in-vision-at sheep (- fov / 3)) ]
+    [ -> count other (in-vision-at sheep 0) ]
+    [ -> count other (in-vision-at sheep (fov / 3)) ]
+    [ -> count other (in-vision-at wolves (- fov / 3)) ]
+    [ -> count other (in-vision-at wolves 0) ]
+    [ -> count other (in-vision-at wolves (fov / 3)) ]
   )
 
   py:set "state_size" length inputs
@@ -102,11 +103,14 @@ end
 to go
   set state-action-pairs table:make
   set rewards table:make
-  set next-state table:make
+  set next-states table:make
   ; stop the simulation of no wolves or sheep
   if not any? turtles [ stop ]
   ; stop the model if there are no wolves and the number of sheep gets very large
   if not any? wolves and count sheep > max-sheep [ user-message "The sheep have inherited the earth" stop ]
+
+  select-sheep-actions
+
   ask sheep [
     sheep-move
     if model-version = "sheep-wolves-grass" [ ; in this version, sheep eat grass, grass grows and it costs sheep energy to move
@@ -117,7 +121,7 @@ to go
     reproduce-sheep  ; sheep reproduce at random rate governed by slider
   ]
   ask wolves [
-    move
+    wolf-move
     set energy energy - 1  ; wolves lose energy as they move
     eat-sheep ; wolves eat a sheep on their patch
     death ; wolves die if our of energy
@@ -125,30 +129,57 @@ to go
   ]
   if model-version = "sheep-wolves-grass" [ ask patches [ grow-grass ] ]
   ask sheep [
-    table:put next-state who sense-state
+    table:put next-states who sense-state
   ]
   reinforce
   tick
   display-labels
 end
 
+to select-sheep-actions
+  ask sheep [ set state sense-state ]
+  let sheep-list sort sheep
+  py:set "states" map [ s -> [ state ] of s ] sheep-list
+  let actions py:runresult "np.argmax(sheep_model.predict(np.array(states)), axis = 1)"
+  (foreach sheep-list actions [ [s a] ->
+    ask s [
+      ifelse random-float 1 < exploration-rate [
+        set action random 3
+      ] [
+        set action a
+      ]
+      table:put state-action-pairs who list state action
+    ]
+  ])
+end
+
+
 to reinforce
-  py:set "results" map [ k ->
-    lput (table:get-or-default next-state k false)
-    lput (table:get-or-default rewards k 0)
-    (table:get state-action-pairs k)
-  ] table:keys state-action-pairs
+  send-results
+  transform-results
+  train
+end
+
+to send-results
+  let keys table:keys state-action-pairs
+  let sas map [ k -> table:get state-action-pairs k ] keys
+  py:set "states" map first sas
+  py:set "actions" map last sas
+  py:set "rewards" map [ k -> table:get-or-default rewards k 0 ] keys
+  py:set "next_states" map [ k -> table:get-or-default next-states k false ] keys
+end
+
+to transform-results
   (py:run
-    "inputs = np.zeros((len(results), state_size))"
-    "targets = np.zeros((inputs.shape[0], num_actions))"
-    "for i, (state, action, reward, next_state) in enumerate(results):"
-    "    inputs[i] = state"
-    "    targets[i] = sheep_model.predict(np.array([state]))"
-    "    if next_state == False: # sheep died, no next state"
-    "        targets[i, action] = reward"
-    "    else:"
-    "        q_sa = np.max(sheep_model.predict(np.array([next_state]))[0])"
-    "        targets[i, action] = reward + discount * q_sa"
+    "inputs = np.array(states)"
+    "targets = sheep_model.predict(inputs)"
+    "next_state_qs = np.array([(0. if s == False else sheep_model.predict(np.array([s])).max()) for s in next_states])"
+    "targets[np.arange(targets.shape[0]), actions] = np.array(rewards) + discount * next_state_qs"
+  )
+end
+
+to train
+  (py:run
     "loss = sheep_model.train_on_batch(inputs, targets)"
   )
   set loss py:runresult "loss"
@@ -161,29 +192,26 @@ to-report in-vision-at [ agentset angle ]
   report result
 end
 
-to move  ; turtle procedure
-  rt random 50
-  lt random 50
-  fd 1
+to wolf-move  ; turtle procedure
+  let target min-one-of sheep in-cone vision fov [ distance myself ]
+  ifelse target = nobody [
+    rt random 50
+    lt random 50
+  ] [
+    face min-one-of sheep in-cone vision fov [ distance myself ]
+  ]
+  fd 0.5
 end
 
 to sheep-move
-  let state sense-state
-  py:set "state" state
-  ifelse random-float 1 < exploration-rate [
-    set action random 3
-  ] [
-    set action py:runresult "np.argmax(sheep_model.predict(np.array([state]), batch_size=1)[0])"
-  ]
-  table:put state-action-pairs who list state action
-  if action = 0 [ ]
+  ; action = 0 is go straight
   if action = 1 [ rt 30 ]
   if action = 2 [ lt 30 ]
-  fd 1
+  fd 0.75
 end
 
 to-report sense-state
-  report (map [ fn -> ifelse-value (runresult fn) [ 1 ] [ 0 ] ] inputs)
+  report map runresult inputs
 end
 
 to eat-grass  ; sheep procedure
@@ -541,7 +569,7 @@ fov
 fov
 0
 180
-120.0
+180.0
 15
 1
 NIL
@@ -553,7 +581,7 @@ INPUTBOX
 105
 405
 hidden-layer-size
-18.0
+9.0
 1
 0
 Number
@@ -621,10 +649,43 @@ INPUTBOX
 345
 405
 lr
-0.2
+0.002
 1
 0
 Number
+
+MONITOR
+355
+530
+465
+575
+grass left -> left
+py:runresult \"sheep_model.predict(np.array([[1,0,0, 0,0,0, 0,0,0]]))[0].argmax()\" = 2
+17
+1
+11
+
+MONITOR
+635
+530
+767
+575
+grass right -> right
+py:runresult \"sheep_model.predict(np.array([[0,0,1, 0,0,0, 0,0,0]]))[0].argmax()\" = 1
+17
+1
+11
+
+MONITOR
+465
+530
+637
+575
+grass forward -> forward
+py:runresult \"sheep_model.predict(np.array([[0,1,0, 0,0,0, 0,0,0]]))[0].argmax()\" = 0
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
