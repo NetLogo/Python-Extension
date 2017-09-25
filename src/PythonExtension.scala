@@ -118,7 +118,6 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
       )
   }
 
-
   def readAllReady(in: InputStreamReader): String = {
     val sb = new StringBuilder
     while (in.ready) sb.append(in.read().toChar)

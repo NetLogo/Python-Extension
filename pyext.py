@@ -41,8 +41,6 @@ def utf8(bs):
         return unicode(bs, 'UTF8')
 
 def to_logo(x):
-    if x == None:
-        return "nobody"
     if isinstance(x, numbers.Number):
         return str(x)
     elif isinstance(x, str):
@@ -53,6 +51,8 @@ def to_logo(x):
         return to_logo(x.items())
     elif hasattr(x, '__len__'):
         return '[' + ' '.join([to_logo(y) for y in x]) + ']'
+    elif x == None:
+        return "nobody"
     else:
         return json.dumps(repr(x))
 
