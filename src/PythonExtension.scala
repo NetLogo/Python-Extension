@@ -1,11 +1,12 @@
 package org.nlogo.py
 
 import java.io.{File, IOException, InputStreamReader, OutputStreamWriter}
+import java.lang.ProcessBuilder.Redirect
 import java.net.{ServerSocket, Socket}
 
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, Workspace}
-import org.nlogo.core.{Dump, LogoList, Syntax}
+import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
 import org.nlogo.workspace.AbstractWorkspace
 
 import scala.collection.JavaConverters._
@@ -45,12 +46,15 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory)
+    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava)
+      .directory(workingDirectory)
+      .redirectError(Redirect.INHERIT)
+      .redirectOutput(Redirect.INHERIT)
     val proc = try {
       pb.start()
     } catch {
       // TODO: Better error message here
-      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: ${pythonCmd}", e)
+      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: $pythonCmd", e)
     }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
@@ -205,6 +209,8 @@ object Set extends api.Command {
 
   def convertToPython(x: AnyRef): String = x match {
     case l: LogoList => "[" + l.map(convertToPython).mkString(", ") + "]"
+    case b: java.lang.Boolean => if (b) "True" else "False"
+    case Nobody => "None"
     case o => Dump.logoObject(o, readable = true, exporting = false)
   }
 }

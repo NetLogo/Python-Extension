@@ -4,6 +4,7 @@ import socket
 import sys
 import numbers
 import json
+from collections import Mapping
 
 LEN_SIZE = 10
 TYPE_SIZE = 1
@@ -40,10 +41,16 @@ def utf8(bs):
         return unicode(bs, 'UTF8')
 
 def to_logo(x):
+    if x == None:
+        return "nobody"
     if isinstance(x, numbers.Number):
         return str(x)
     elif isinstance(x, str):
         return json.dumps(x)
+    elif isinstance(x, bool):
+        return str(x).lower
+    elif isinstance(x, Mapping):
+        return to_logo(x.items())
     elif hasattr(x, '__len__'):
         return '[' + ' '.join([to_logo(y) for y in x]) + ']'
     else:
@@ -65,18 +72,17 @@ def logo_responder(port):
         try:
             buff = ConnectionBuffer(conn)
             globs = {}
-            locs = {}
             while True:
                 length = int(buff.get(LEN_SIZE))
                 msg_type = int(buff.get(TYPE_SIZE))
                 code = utf8(buff.get(length))
                 try:
                     if msg_type == STMT_MSG:
-                        exec(code, globs, locs)
+                        exec(code, globs)
                         result = to_bytes('')
                         typ = to_bytes(str(SUCC_MSG))
                     else:
-                        result = to_bytes(to_logo(eval(code, globs, locs)))
+                        result = to_bytes(to_logo(eval(code, globs)))
                         typ = to_bytes(str(SUCC_MSG))
                 except BaseException as e:
                     result = to_bytes(str(e))
