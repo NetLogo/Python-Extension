@@ -87,6 +87,8 @@ def logo_responder(port):
                 except BaseException as e:
                     result = to_bytes(str(e))
                     typ = to_bytes(str(ERR_MSG))
+                finally:
+                    flush()
                 l = to_bytes(str(len(result)).zfill(LEN_SIZE))
                 conn.sendall(l + typ + result)
         finally:
@@ -94,7 +96,9 @@ def logo_responder(port):
     finally:
         sock.close()
 
-
+def flush():
+    sys.stdout.flush()
+    sys.stderr.flush()
 
 def conn_iter(conn):
     buff = bytes()

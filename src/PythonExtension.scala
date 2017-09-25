@@ -5,7 +5,7 @@ import java.lang.ProcessBuilder.Redirect
 import java.net.{ServerSocket, Socket}
 
 import org.nlogo.api
-import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, Workspace}
+import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
 import org.nlogo.workspace.AbstractWorkspace
 
@@ -46,10 +46,7 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava)
-      .directory(workingDirectory)
-      .redirectError(Redirect.INHERIT)
-      .redirectOutput(Redirect.INHERIT)
+    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava) .directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
@@ -101,11 +98,39 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   val in = new InputStreamReader(socket.getInputStream)
   val out = new OutputStreamWriter(socket.getOutputStream)
 
+  val stdout = new InputStreamReader(proc.getInputStream)
+  val stderr = new InputStreamReader(proc.getErrorStream)
+
+  def redirectPipes(): Unit = {
+    val stdoutContents = readAllReady(stdout)
+    val stderrContents = readAllReady(stderr)
+    if (stdoutContents.nonEmpty)
+      ws.outputObject(
+        stdoutContents, null,
+        addNewline = true, readable = false,
+        OutputDestination.Normal
+      )
+    if (stderrContents.nonEmpty)
+      ws.outputObject(
+        s"Python error output:\n$stderrContents", null,
+        addNewline = true, readable = false,
+        OutputDestination.Normal
+      )
+  }
+
+
+  def readAllReady(in: InputStreamReader): String = {
+    val sb = new StringBuilder
+    while (in.ready) sb.append(in.read().toChar)
+    sb.toString
+  }
+
   def exec(stmt: String): Unit = {
     send(PythonSubprocess.stmtMsg, stmt)
     val l = read(PythonSubprocess.lenSize).toInt
     val t = read(PythonSubprocess.typeSize).toInt
     val r = read(l)
+    redirectPipes()
     if (t != 0)
       throw new ExtensionException(r)
   }
@@ -115,6 +140,7 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     val l = read(PythonSubprocess.lenSize).toInt
     val t = read(PythonSubprocess.typeSize).toInt
     val r = read(l)
+    redirectPipes()
     if (t == 0)
       ws.readFromString(r)
     else
