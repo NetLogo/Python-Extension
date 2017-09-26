@@ -39,8 +39,8 @@ to setup
   py:set "hl_size" 36
   py:set "num_actions" 3
   py:set "lr" 0.0002
-  py:set "memory_size" 100001
-  py:set "batch_size" number-of-cars
+  py:set "memory_size" 10000
+  py:set "batch_size" 128
 
   (py:run
     "model = Sequential()"
@@ -51,8 +51,8 @@ to setup
     "optimizer = optimizers.adam()"
     "model.compile(optimizer, 'mse')"
     "model.summary()"
-    "memory = []"
-  )
+    "memory = []")
+
   ask patches [ setup-road ]
   set speed-limit 1
   set speed-min 0
@@ -120,6 +120,7 @@ to select-actions
   let turtle-list sort turtles
   py:set "states" map [ t -> [ state ] of t ] turtle-list
   let actions py:runresult "np.argmax(model.predict(np.array(states)), axis = 1)"
+
   (foreach turtle-list actions [ [t a] ->
     ask t [
       ifelse random-float 1 < exploration-rate [
@@ -145,7 +146,8 @@ to train
     "rewards = np.array([memory[i][2] for i in sample_ix])"
     "next_states = np.array([memory[i][3] for i in sample_ix])"
     "targets = model.predict(inputs)"
-    "next_state_qs = np.max(model.predict(next_states), axis = 1)"
+    "next_state_rewards = model.predict(next_states)"
+    "next_state_qs = np.max(next_state_rewards, axis = 1)"
     "targets[np.arange(targets.shape[0]), actions] = rewards + discount * next_state_qs"
     "model.train_on_batch(inputs, targets)"
   )
@@ -163,7 +165,7 @@ end
 
 to slow-down-car [ car-ahead ] ;; turtle procedure
   ;; slow down so you are driving more slowly than the car ahead of you
-  set speed [ speed ] of car-ahead - deceleration
+  set speed [ speed ] of car-ahead - stop-penalty
 end
 
 to accelerate
@@ -254,25 +256,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-121
-180
-266
-213
+15
+175
+265
+208
 deceleration
 deceleration
 0
-.099
-0.027
-.001
+.0099
+0.0045
+.0001
 1
 NIL
 HORIZONTAL
 
 SLIDER
-121
-145
-266
-178
+15
+140
+265
+173
 acceleration
 acceleration
 0
@@ -303,17 +305,6 @@ PENS
 "min speed" 1.0 0 -13345367 true "" "plot min [speed] of turtles"
 "max speed" 1.0 0 -10899396 true "" "plot max [speed] of turtles"
 
-MONITOR
-17
-145
-114
-190
-red car speed
-ifelse-value any? turtles\n  [   [speed] of sample-car  ]\n  [  0 ]
-3
-1
-11
-
 BUTTON
 15
 95
@@ -332,10 +323,10 @@ NIL
 1
 
 SLIDER
-10
-260
-182
-293
+15
+305
+265
+338
 discount
 discount
 0
@@ -347,15 +338,15 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-225
-182
-258
+15
+270
+265
+303
 exploration-rate
 exploration-rate
 0
 1
-0.01
+0.05
 0.01
 1
 NIL
@@ -380,6 +371,21 @@ PENS
 "default" 1.0 0 -2674135 true "" "plot count turtles with [ action = 0 ]"
 "pen-1" 1.0 0 -1184463 true "" "plot count turtles with [ action = 1 ]"
 "pen-2" 1.0 0 -10899396 true "" "plot count turtles with [ action = 2 ]"
+
+SLIDER
+15
+210
+265
+243
+stop-penalty
+stop-penalty
+0
+.099
+0.027
+0.001
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
