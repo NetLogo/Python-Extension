@@ -38,7 +38,6 @@ to setup
   py:set "state_dims" length inputs
   py:set "hl_size" 36
   py:set "num_actions" 3
-  py:set "lr" 0.0002
   py:set "memory_size" 10000
   py:set "batch_size" 128
 
@@ -111,7 +110,7 @@ to go
     set reward (log (speed + 0.0000000000005) 2)
     ;set reward speed
   ]
-  train
+  if train? [ train ]
   tick
 end
 
@@ -208,9 +207,9 @@ ticks
 
 BUTTON
 110
-95
+55
 182
-136
+96
 NIL
 setup
 NIL
@@ -225,9 +224,9 @@ NIL
 
 BUTTON
 193
-96
+56
 264
-136
+96
 NIL
 go
 T
@@ -241,10 +240,10 @@ NIL
 0
 
 SLIDER
-12
-34
-216
-67
+15
+15
+265
+48
 number-of-cars
 number-of-cars
 1
@@ -257,9 +256,9 @@ HORIZONTAL
 
 SLIDER
 15
-175
+135
 265
-208
+168
 deceleration
 deceleration
 0
@@ -272,9 +271,9 @@ HORIZONTAL
 
 SLIDER
 15
-140
+100
 265
-173
+133
 acceleration
 acceleration
 0
@@ -307,9 +306,9 @@ PENS
 
 BUTTON
 15
-95
+55
 97
-135
+95
 NIL
 setup-tf
 NIL
@@ -324,9 +323,9 @@ NIL
 
 SLIDER
 15
-305
+240
 265
-338
+273
 discount
 discount
 0
@@ -339,9 +338,9 @@ HORIZONTAL
 
 SLIDER
 15
-270
+205
 265
-303
+238
 exploration-rate
 exploration-rate
 0
@@ -374,9 +373,9 @@ PENS
 
 SLIDER
 15
-210
+170
 265
-243
+203
 stop-penalty
 stop-penalty
 0
@@ -386,6 +385,17 @@ stop-penalty
 1
 NIL
 HORIZONTAL
+
+SWITCH
+15
+275
+117
+308
+train?
+train?
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
