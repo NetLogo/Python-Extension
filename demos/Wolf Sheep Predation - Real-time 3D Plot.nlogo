@@ -108,7 +108,9 @@ end
 
 to update-pyplot
   every 0.25 [
-    if pyplot-dirty? [ redraw-pyplot ]
+    every 1 [
+      if pyplot-dirty? [ redraw-pyplot ]
+    ]
     py:run "plt.pause(0.01)"
   ]
 end

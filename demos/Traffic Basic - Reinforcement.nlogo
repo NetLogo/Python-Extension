@@ -163,6 +163,8 @@ to train
 end
 
 to-report next-car
+  let here min-one-of turtles-here with [ xcor > [ xcor ] of myself ] [ distance myself ]
+  if here != nobody [ report here ]
   let i 1
   while [ not any? turtles-on patch-ahead i ] [
     set i i + 1
@@ -374,7 +376,7 @@ NIL
 20.0
 true
 false
-"" ""
+"set-plot-y-range 0 number-of-cars" ""
 PENS
 "default" 1.0 0 -2674135 true "" "plot count turtles with [ action = 0 ]"
 "pen-1" 1.0 0 -1184463 true "" "plot count turtles with [ action = 1 ]"
@@ -414,7 +416,7 @@ SLIDER
 memory-size
 memory-size
 0
-100000
+1000000
 10000.0
 1000
 1
