@@ -46,7 +46,7 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava) .directory(workingDirectory)
+    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
@@ -77,7 +77,7 @@ object PythonSubprocess {
       // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
       // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
       List("/bin/bash", "-c",
-        s"eval $$(/usr/libexec/path_helper -s) ; echo $$PATH ; '$pythonCmd' '$pythonScript' $port")
+        s"eval $$(/usr/libexec/path_helper -s) ; '$pythonCmd' '$pythonScript' $port")
     else
       List(pythonCmd, pythonScript, port.toString)
     cmd

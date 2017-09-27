@@ -5,6 +5,7 @@ globals [
   speed-limit
   speed-min
   inputs
+  loss
 ]
 
 turtles-own [
@@ -38,8 +39,9 @@ to setup
   py:set "state_dims" length inputs
   py:set "hl_size" 36
   py:set "num_actions" 3
-  py:set "memory_size" 10000
-  py:set "batch_size" 128
+  py:set "memory_size" memory-size
+  py:set "batch_size" batch-size
+  py:set "lr" learning-rate
 
   (py:run
     "model = Sequential()"
@@ -47,7 +49,7 @@ to setup
     "model.add(Dense(hl_size, activation='relu'))"
     "model.add(Dense(hl_size, activation='relu'))"
     "model.add(Dense(num_actions))"
-    "optimizer = optimizers.adam()"
+    "optimizer = optimizers.adam(lr=lr)"
     "model.compile(optimizer, 'mse')"
     "model.summary()"
     "memory = []")
@@ -107,10 +109,13 @@ to go
     if speed < speed-min [ set speed speed-min ]
     if speed > speed-limit [ set speed speed-limit ]
     fd speed
-    set reward (log (speed + 0.0000000000005) 2)
+    set reward (log (speed + 1e-8) 2)
     ;set reward speed
   ]
-  if train? [ train ]
+  if train? [
+    remember
+    train
+  ]
   tick
 end
 
@@ -131,14 +136,18 @@ to select-actions
   ])
 end
 
-to train
+to remember
   ask turtles [ set next-state map runresult inputs ]
   let data [ (list state action reward next-state) ] of turtles
   py:set "new_exp" data
   (py:run
     "memory.extend(new_exp)"
     "if len(memory) > memory_size:"
-    "    memory = memory[-memory_size:]"
+    "    memory = memory[-memory_size:]")
+end
+
+to train
+  (py:run
     "sample_ix = np.random.randint(len(memory), size = batch_size)"
     "inputs = np.array([memory[i][0] for i in sample_ix])"
     "actions = np.array([memory[i][1] for i in sample_ix])"
@@ -179,10 +188,10 @@ end
 ; See Info tab for full copyright and license.
 @#$#@#$#@
 GRAPHICS-WINDOW
-10
-405
-898
-569
+15
+425
+903
+589
 -1
 -1
 17.255
@@ -207,9 +216,9 @@ ticks
 
 BUTTON
 110
-55
+160
 182
-96
+201
 NIL
 setup
 NIL
@@ -224,9 +233,9 @@ NIL
 
 BUTTON
 193
-56
+161
 264
-96
+201
 NIL
 go
 T
@@ -256,9 +265,9 @@ HORIZONTAL
 
 SLIDER
 15
-135
+240
 265
-168
+273
 deceleration
 deceleration
 0
@@ -271,9 +280,9 @@ HORIZONTAL
 
 SLIDER
 15
-100
+205
 265
-133
+238
 acceleration
 acceleration
 0
@@ -295,7 +304,7 @@ speed
 0.0
 300.0
 0.0
-1.1
+1.0
 true
 false
 "" ""
@@ -306,9 +315,9 @@ PENS
 
 BUTTON
 15
-55
+160
 97
-95
+200
 NIL
 setup-tf
 NIL
@@ -323,9 +332,9 @@ NIL
 
 SLIDER
 15
-240
+345
 265
-273
+378
 discount
 discount
 0
@@ -338,14 +347,14 @@ HORIZONTAL
 
 SLIDER
 15
-205
+310
 265
-238
+343
 exploration-rate
 exploration-rate
 0
 1
-0.05
+0.01
 0.01
 1
 NIL
@@ -362,7 +371,7 @@ NIL
 0.0
 300.0
 0.0
-10.0
+20.0
 true
 false
 "" ""
@@ -373,9 +382,9 @@ PENS
 
 SLIDER
 15
-170
+275
 265
-203
+308
 stop-penalty
 stop-penalty
 0
@@ -388,14 +397,59 @@ HORIZONTAL
 
 SWITCH
 15
-275
+380
 117
-308
+413
 train?
 train?
 0
 1
 -1000
+
+SLIDER
+15
+50
+265
+83
+memory-size
+memory-size
+0
+100000
+10000.0
+1000
+1
+NIL
+HORIZONTAL
+
+SLIDER
+15
+85
+265
+118
+batch-size
+batch-size
+0
+1024
+128.0
+32
+1
+NIL
+HORIZONTAL
+
+SLIDER
+15
+120
+265
+153
+learning-rate
+learning-rate
+0
+0.01
+0.001
+0.0001
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?

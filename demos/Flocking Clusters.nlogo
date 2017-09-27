@@ -35,7 +35,7 @@ to go
   let clusters py:runresult "cl.dbscan(np.array(coords), eps)"
   (foreach (sort turtles) (item 1 clusters) [ [t c] ->
     ask t [
-      set color item ((c + 1) mod 14) base-colors
+      set color item ((c mod 13) + 1) base-colors
     ]
   ])
   tick
