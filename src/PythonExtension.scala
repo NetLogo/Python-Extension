@@ -1,6 +1,6 @@
 package org.nlogo.py
 
-import java.io.{File, IOException, InputStreamReader, OutputStreamWriter}
+import java.io.{File, IOException, InputStream, InputStreamReader, OutputStreamWriter}
 import java.net.{ServerSocket, Socket}
 
 import org.nlogo.api
@@ -35,7 +35,7 @@ object PythonSubprocess {
   val errorMsg = 1
 
 
-  def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
+  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
     val pyScript: String = new File(
       new File(
         // Getting the path straight from the URL will leave, eg, '%20's in the place of spaces. Converting to URI first
@@ -57,7 +57,7 @@ object PythonSubprocess {
       pb.start()
     } catch {
       // TODO: Better error message here
-      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: $pythonCmd", e)
+      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: ${pythonCmd.head}", e)
     }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
@@ -69,12 +69,26 @@ object PythonSubprocess {
         case e: SecurityException => throw new ExtensionException(e)
       }
     }
-    if (!proc.isAlive) throw new ExtensionException("Python process failed to start")
-
+    if (!proc.isAlive) {
+      throw new ExtensionException(
+        "Python process failed to start\n" +
+          "Output:\n" +
+          readAllReady(new InputStreamReader(proc.getInputStream)) + "\n\n" +
+          "Error output:\n" +
+          readAllReady(new InputStreamReader(proc.getErrorStream))
+      )
+    }
     new PythonSubprocess(ws, proc, socket)
   }
 
-  private def cmd(pythonCmd: String, pythonScript: String, port: Int): List[String] = {
+  def readAllReady(in: InputStreamReader): String = {
+    val sb = new StringBuilder
+    while (in.ready) sb.append(in.read().toChar)
+    sb.toString
+  }
+
+
+  private def cmd(pythonCmd: Seq[String], pythonScript: String, port: Int): Seq[String] = {
     val os = System.getProperty("os.name").toLowerCase
 
     val cmd = if (os.contains("mac") && System.getenv("PATH") == "/usr/bin:/bin:/usr/sbin:/sbin")
@@ -83,9 +97,9 @@ object PythonSubprocess {
       // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
       // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
       List("/bin/bash", "-c",
-        s"eval $$(/usr/libexec/path_helper -s) ; '$pythonCmd' '$pythonScript' $port")
+        s"eval $$(/usr/libexec/path_helper -s) ; ${pythonCmd.map(a => s"'$a'").mkString(" ")} '$pythonScript' $port")
     else
-      List(pythonCmd, pythonScript, port.toString)
+      pythonCmd ++ Seq(pythonScript, port.toString)
     cmd
   }
 
@@ -108,8 +122,8 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   val stderr = new InputStreamReader(proc.getErrorStream)
 
   def redirectPipes(): Unit = {
-    val stdoutContents = readAllReady(stdout)
-    val stderrContents = readAllReady(stderr)
+    val stdoutContents = PythonSubprocess.readAllReady(stdout)
+    val stderrContents = PythonSubprocess.readAllReady(stderr)
     if (stdoutContents.nonEmpty)
       ws.outputObject(
         stdoutContents, null,
@@ -122,12 +136,6 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
         addNewline = true, readable = false,
         OutputDestination.Normal
       )
-  }
-
-  def readAllReady(in: InputStreamReader): String = {
-    val sb = new StringBuilder
-    while (in.ready) sb.append(in.read().toChar)
-    sb.toString
   }
 
   def exec(stmt: String): Unit = {
@@ -199,12 +207,12 @@ class PythonExtension extends api.DefaultClassManager {
 
 object SetupPython extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(
-    right = List(Syntax.StringType)
+    right = List(Syntax.StringType | Syntax.RepeatableType)
   )
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     context.workspace.getModelDir
-    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args(0).getString)
+    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args.map(_.getString))
   }
 }
 

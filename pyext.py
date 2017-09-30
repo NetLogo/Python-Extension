@@ -108,6 +108,6 @@ def conn_iter(conn):
 
 if __name__ == '__main__':
     sys.path.insert(0, os.getcwd())
-    logo_responder(int(sys.argv[1]))
+    logo_responder(int(sys.argv[-1]))
 
 

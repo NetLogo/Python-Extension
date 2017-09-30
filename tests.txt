@@ -89,3 +89,8 @@ dicts-convert-to-lists-python3
   extensions [ py ]
   O> py:setup "python3"
   py:runresult "{'a': 1}" => [["a" 1]]
+
+setup-takes-arguments-python3
+  extensions [ py ]
+  O> (py:setup "python3" "-O")
+  py:runresult "0" => 0
