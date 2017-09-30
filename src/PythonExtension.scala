@@ -1,7 +1,6 @@
 package org.nlogo.py
 
 import java.io.{File, IOException, InputStreamReader, OutputStreamWriter}
-import java.lang.ProcessBuilder.Redirect
 import java.net.{ServerSocket, Socket}
 
 import org.nlogo.api
@@ -12,7 +11,14 @@ import org.nlogo.workspace.AbstractWorkspace
 import scala.collection.JavaConverters._
 
 object PythonExtension {
-  var pythonProcess: PythonSubprocess = _
+  private var _pythonProcess: Option[PythonSubprocess] = None
+
+  def pythonProcess: PythonSubprocess = _pythonProcess.getOrElse(throw new ExtensionException("Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
+
+  def pythonProcess_=(proc: PythonSubprocess): Unit = {
+    _pythonProcess.foreach(_.close())
+    _pythonProcess =  Some(proc)
+  }
 }
 
 object PythonSubprocess {
@@ -187,9 +193,7 @@ class PythonExtension extends api.DefaultClassManager {
 
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
-    if (PythonExtension.pythonProcess != null) {
-      PythonExtension.pythonProcess.close()
-    }
+    PythonExtension._pythonProcess.foreach(_.close())
   }
 }
 
@@ -200,9 +204,6 @@ object SetupPython extends api.Command {
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     context.workspace.getModelDir
-    if (PythonExtension.pythonProcess != null) {
-      PythonExtension.pythonProcess.close()
-    }
     PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args(0).getString)
   }
 }

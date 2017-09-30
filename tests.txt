@@ -1,3 +1,6 @@
+friendly-error-with-no-setup
+  extensions [ py ]
+  O> py:run "foo" => ERROR Extension exception: Python process has not been started. Please run PY:SETUP before any other python extension primitive.
 nonexistent-python
   extensions [ py ]
   O> py:setup "foobarbaz" => ERROR Extension exception: Couldn't find Python executable: foobarbaz
