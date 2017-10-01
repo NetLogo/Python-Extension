@@ -7,6 +7,9 @@ import sys
 import numbers
 import json
 from collections import Mapping
+import umsgpack
+import traceback
+
 
 LEN_SIZE = 10
 TYPE_SIZE = 1
@@ -20,21 +23,35 @@ EXPR_MSG = 1
 SUCC_MSG = 0
 ERR_MSG  = 1
 
-class ConnectionBuffer(object):
+class ConnectionReader(object):
     def __init__(self, conn):
         self.conn = conn
-        self.buff = bytes()
+        self.buff = bytearray()
 
-    def get(self, size):
+    def read(self, size):
         while len(self.buff) < size:
-            data = self.conn.recv(1024)
+            data = self.conn.recv(8192) # Default buffer size in messagepack
             if len(data) == 0:
                 raise EOFError('Connection closed')
-            self.buff += data
-
-        result = self.buff[:size]
-        self.buff = self.buff[size:]
+            self.buff.extend(data)
+        result = bytes(self.buff[:size])
+        del self.buff[:size]
         return result
+
+class ConnectionWriter(object):
+    def __init__(self, conn):
+        self.conn = conn
+        self.buff = bytearray()
+
+    def write(self, data):
+        self.buff.extend(data)
+
+    def flush(self):
+        self.conn.sendall(self.buff)
+        self.clear()
+
+    def clear(self):
+        self.buff = bytearray()
 
 def utf8(bs):
     if sys.version_info >= (3,0):
@@ -42,27 +59,41 @@ def utf8(bs):
     else:
         return unicode(bs, 'UTF8')
 
-def to_logo(x):
-    if isinstance(x, numbers.Number):
-        return str(x)
-    elif isinstance(x, str):
-        return json.dumps(x)
-    elif isinstance(x, bool):
-        return str(x).lower
-    elif isinstance(x, Mapping):
-        return to_logo(x.items())
-    elif hasattr(x, '__len__'):
-        return '[' + ' '.join([to_logo(y) for y in x]) + ']'
-    elif x == None:
-        return "nobody"
-    else:
-        return json.dumps(repr(x))
-
 def to_bytes(s):
     if sys.version_info >= (3,0):
         return bytes(s, 'UTF8')
     else:
         return bytes(s)
+
+def sanitize(x):
+    # Note: no `unicode` class in Python 3, so we have to check string
+    if isinstance(x, float) or \
+       isinstance(x, int) or \
+       isinstance(x, bool) or \
+       isinstance(x, str) or \
+       isinstance(x, bytes) or \
+       x.__class__.__name__ == 'unicode' or \
+       isinstance(x, None.__class__):
+        return x
+    elif isinstance(x, numbers.Number):
+        return float(x)
+    elif isinstance(x, Mapping):
+        return {sanitize(k): sanitize(v) for k,v in x.items()}
+    elif hasattr(x, '__len__'):
+        return [sanitize(y) for y in x]
+    else:
+        return repr(x)
+
+
+def send(f, *args):
+    try:
+        sargs = [ sanitize(arg) for arg in args ]
+        for arg in sargs:
+            umsgpack.pack(arg, f)
+        f.flush()
+    except Exception as e:
+        f.clear()
+        raise
 
 def logo_responder(port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -72,27 +103,26 @@ def logo_responder(port):
         conn, addr = sock.accept()
         buff = bytes()
         try:
-            buff = ConnectionBuffer(conn)
+            inp = ConnectionReader(conn)
+            out = ConnectionWriter(conn)
             globs = {}
             while True:
-                length = int(buff.get(LEN_SIZE))
-                msg_type = int(buff.get(TYPE_SIZE))
-                code = utf8(buff.get(length))
+                msg_type = umsgpack.unpack(inp)
                 try:
                     if msg_type == STMT_MSG:
+                        code = umsgpack.unpack(inp)
                         exec(code, globs)
-                        result = to_bytes('')
-                        typ = to_bytes(str(SUCC_MSG))
+                        send(out, SUCC_MSG)
+                    elif msg_type == EXPR_MSG:
+                        code = umsgpack.unpack(inp)
+                        result = eval(code, globs)
+                        send(out, SUCC_MSG, result)
                     else:
-                        result = to_bytes(to_logo(eval(code, globs)))
-                        typ = to_bytes(str(SUCC_MSG))
-                except BaseException as e:
-                    result = to_bytes(str(e))
-                    typ = to_bytes(str(ERR_MSG))
+                        raise Exception('Unrecognized message type: {}'.format(msg_type))
+                except Exception as e:
+                    send(out, ERR_MSG, str(e), traceback.format_exc())
                 finally:
                     flush()
-                l = to_bytes(str(len(result)).zfill(LEN_SIZE))
-                conn.sendall(l + typ + result)
         finally:
             conn.close()
     finally:

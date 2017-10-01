@@ -33,13 +33,24 @@ basic-netlogo-types-convert-python2
 error-handling-python2
   extensions [ py ]
   O> py:setup "python2"
-  O> py:run "raise BaseException('hi')" => ERROR Extension exception: hi
+  O> py:run "raise Exception('hi')" => ERROR Extension exception: hi
   py:runresult "1 / 0" => ERROR Extension exception: integer division or modulo by zero
 
 dicts-convert-to-lists-python2
   extensions [ py ]
   O> py:setup "python2"
   py:runresult "{'a': 1}" => [["a" 1]]
+
+sets-convert-to-lists-python2
+  extensions [ py ]
+  O> py:setup "python2"
+  py:runresult "{1, 1}" => [1]
+
+np-array-convert-to-lists-python2
+  extensions [ py ]
+  O> py:setup "python2"
+  O> py:run "import numpy as np"
+  py:runresult "np.array([1,2,3])" => [1 2 3]
 
 open-connection-python3
   extensions [ py ]
@@ -69,7 +80,7 @@ basic-netlogo-types-convert-python3
 error-handling-python3
   extensions [ py ]
   O> py:setup "python3"
-  O> py:run "raise BaseException('hi')" => ERROR Extension exception: hi
+  O> py:run "raise Exception('hi')" => ERROR Extension exception: hi
   py:runresult "1 / 0" => ERROR Extension exception: division by zero
 
 multiline-python3
@@ -89,6 +100,17 @@ dicts-convert-to-lists-python3
   extensions [ py ]
   O> py:setup "python3"
   py:runresult "{'a': 1}" => [["a" 1]]
+
+sets-convert-to-lists-python3
+  extensions [ py ]
+  O> py:setup "python3"
+  py:runresult "{1, 1}" => [1]
+
+np-array-convert-to-lists-python3
+  extensions [ py ]
+  O> py:setup "python3"
+  O> py:run "import numpy as np"
+  py:runresult "np.array([1,2,3])" => [1 2 3]
 
 setup-takes-arguments-python3
   extensions [ py ]

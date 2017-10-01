@@ -1,8 +1,13 @@
 package org.nlogo.py
 
-import java.io.{File, IOException, InputStream, InputStreamReader, OutputStreamWriter}
+import java.awt.GraphicsEnvironment
+import java.io.{File, IOException, InputStreamReader}
+import java.lang.ProcessBuilder.Redirect
+import java.lang.{Boolean => JBoolean, Double => JDouble}
 import java.net.{ServerSocket, Socket}
 
+import org.msgpack.core.{MessagePack, MessagePacker, MessageUnpacker}
+import org.msgpack.value.{ArrayValue, BinaryValue, BooleanValue, MapValue, NilValue, NumberValue, StringValue, Value}
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
@@ -23,7 +28,6 @@ object PythonExtension {
 
 object PythonSubprocess {
   // In and out
-  val lenSize = 10
   val typeSize = 1
 
   // Out types
@@ -52,7 +56,7 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory)
+    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory).redirectError(Redirect.INHERIT).redirectInput(Redirect.INHERIT)
     val proc = try {
       pb.start()
     } catch {
@@ -61,7 +65,6 @@ object PythonSubprocess {
     }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
-      Thread.sleep(10)
       try {
         socket = new Socket("localhost", port)
       } catch {
@@ -115,76 +118,69 @@ object PythonSubprocess {
 }
 
 class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
-  val in = new InputStreamReader(socket.getInputStream)
-  val out = new OutputStreamWriter(socket.getOutputStream)
+  val in: MessageUnpacker = MessagePack.newDefaultUnpacker(socket.getInputStream)
+  val out: MessagePacker = MessagePack.newDefaultPacker(socket.getOutputStream)
 
   val stdout = new InputStreamReader(proc.getInputStream)
   val stderr = new InputStreamReader(proc.getErrorStream)
 
+  def output(s: String): Unit = {
+    if (GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true")
+      println(s)
+    else
+      ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
+  }
   def redirectPipes(): Unit = {
     val stdoutContents = PythonSubprocess.readAllReady(stdout)
     val stderrContents = PythonSubprocess.readAllReady(stderr)
     if (stdoutContents.nonEmpty)
-      ws.outputObject(
-        stdoutContents, null,
-        addNewline = true, readable = false,
-        OutputDestination.Normal
-      )
+      output(stdoutContents)
     if (stderrContents.nonEmpty)
-      ws.outputObject(
-        s"Python error output:\n$stderrContents", null,
-        addNewline = true, readable = false,
-        OutputDestination.Normal
-      )
+      output(s"Python error output:\n$stderrContents")
   }
 
   def exec(stmt: String): Unit = {
-    send(PythonSubprocess.stmtMsg, stmt)
-    val l = read(PythonSubprocess.lenSize).toInt
-    val t = read(PythonSubprocess.typeSize).toInt
-    val r = read(l)
+    sendStmt(stmt)
+    val t = in.unpackInt()
     redirectPipes()
-    if (t != 0)
-      throw new ExtensionException(r)
+    if (t != 0) {
+      throw pythonException()
+    }
   }
 
   def eval(expr: String): AnyRef = {
-    send(PythonSubprocess.exprMsg, expr)
-    val l = read(PythonSubprocess.lenSize).toInt
-    val t = read(PythonSubprocess.typeSize).toInt
-    val r = read(l)
+    sendExpr(expr)
+    val t = in.unpackInt()
     redirectPipes()
-    if (t == 0)
-      ws.readFromString(r)
-    else
-      throw new ExtensionException(r)
+    if (t == 0) {
+      val x = in.unpackValue()
+      ConvertToLogo(x)
+    } else {
+      throw pythonException()
+    }
   }
 
-  private def send(msgType: Int, msg: String): Unit = {
-    val fullMsg = s"%0${PythonSubprocess.lenSize}d%d%s".format(msg.length, msgType, msg)
-    out.write(fullMsg)
+  def pythonException(): Exception ={
+    val e = in.unpackString()
+    val tb = in.unpackString()
+    new ExtensionException(e, new Exception(tb))
+  }
+
+  private def sendStmt(msg: String): Unit = {
+    out.packInt(PythonSubprocess.stmtMsg)
+    out.packString(msg)
     out.flush()
   }
 
-  private def read(bytes: Int): String = {
-    val sb = new StringBuilder
-    for (_ <- 0 until bytes) {
-      /* This can be used to prevent the UI from locking, but at a significant performance hit
-      while (!in.ready) {
-        ws.asInstanceOf[AbstractWorkspace].breathe()
-        ws.world.wait(1) // Prevent UI from locking up while we wait
-      }
-      */
-      val nextChar = in.read()
-      if (nextChar == -1) {
-        throw new ExtensionException("Python process quit unexpectedly")
-      }
-      sb.append(nextChar.toChar)
-    }
-    sb.toString
+  private def sendExpr(msg: String): Unit = {
+    out.packInt(PythonSubprocess.exprMsg)
+    out.packString(msg)
+    out.flush()
   }
 
   def close(): Unit = {
+    in.close()
+    out.close()
     socket.close()
     proc.destroy()
     proc.waitFor()
@@ -247,4 +243,60 @@ object Set extends api.Command {
     case Nobody => "None"
     case o => Dump.logoObject(o, readable = true, exporting = false)
   }
+}
+
+case class LogoPacker(packer: MessagePacker) {
+  def packNumber(x: JDouble): LogoPacker = {
+    packer.packDouble(x.doubleValue)
+    this
+  }
+
+  def packString(s: String): LogoPacker = {
+    packer.packString(s)
+    this
+  }
+
+  def packBoolean(b: JBoolean): LogoPacker = {
+    packer.packBoolean(b.booleanValue)
+    this
+  }
+
+  def packList(l: LogoList): LogoPacker = {
+    packer.packArrayHeader(l.length)
+    l.foreach(pack)
+    this
+  }
+
+  def packNobody(): LogoPacker = {
+    packer.packNil()
+    this
+  }
+
+  def pack(v: AnyRef): LogoPacker = {
+    v match {
+      case x: JDouble => packNumber(x)
+      case b: JBoolean => packBoolean(b)
+      case s: String => packString(s)
+      case l: LogoList => packList(l)
+      case Nobody => packNobody()
+    }
+    this
+  }
+}
+
+object ConvertToLogo {
+  def apply(v: Value): AnyRef = v match {
+    case _: NilValue => Nobody
+    case b: BooleanValue => b.getBoolean: JBoolean
+    case x: NumberValue => x.toDouble: JDouble
+    case s: StringValue => s.toString
+    case s: BinaryValue => s.toString
+    case a: ArrayValue => toLogoList(a)
+    case m: MapValue => toLogoList(m)
+  }
+
+  def toLogoList(a: ArrayValue): LogoList = LogoList.fromVector(a.asScala.map(apply).toVector)
+  def toLogoList(m: MapValue): LogoList = LogoList.fromVector(m.map.asScala.map{
+      case (k,v) => LogoList(apply(k), apply(v))
+    }.toVector)
 }
