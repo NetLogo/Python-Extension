@@ -112,6 +112,12 @@ np-array-convert-to-lists-python3
   O> py:run "import numpy as np"
   py:runresult "np.array([1,2,3])" => [1 2 3]
 
+send-receive-big-python3
+  extensions [ py ]
+  O> py:setup "python3"
+  O> py:set "foo" range 100000
+  length py:runresult "foo" => 100000
+
 setup-takes-arguments-python3
   extensions [ py ]
   O> (py:setup "python3" "-O")

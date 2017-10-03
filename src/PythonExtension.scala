@@ -1,12 +1,16 @@
 package org.nlogo.py
 
 import java.awt.GraphicsEnvironment
-import java.io.{File, IOException, InputStreamReader}
+import java.io.{File, IOException, InputStreamReader, OutputStream}
 import java.lang.ProcessBuilder.Redirect
 import java.lang.{Boolean => JBoolean, Double => JDouble}
-import java.net.{ServerSocket, Socket}
+import java.net.{InetSocketAddress, ServerSocket, Socket, SocketAddress}
+import java.nio.channels.SocketChannel
 
-import org.msgpack.core.{MessagePack, MessagePacker, MessageUnpacker}
+import org.msgpack.core.MessagePack.PackerConfig
+import org.msgpack.core.buffer.{MessageBuffer, MessageBufferOutput}
+import org.msgpack.core.{MessageBufferPacker, MessagePack, MessagePacker, MessageUnpacker}
+import org.msgpack.value.impl.ImmutableArrayValueImpl
 import org.msgpack.value.{ArrayValue, BinaryValue, BooleanValue, MapValue, NilValue, NumberValue, StringValue, Value}
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
@@ -33,6 +37,7 @@ object PythonSubprocess {
   // Out types
   val stmtMsg = 0
   val exprMsg = 1
+  val assnMsg = 2
 
   // In types
   val successMsg = 0
@@ -118,8 +123,11 @@ object PythonSubprocess {
 }
 
 class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
+  socket.setSendBufferSize(8192)
   val in: MessageUnpacker = MessagePack.newDefaultUnpacker(socket.getInputStream)
-  val out: MessagePacker = MessagePack.newDefaultPacker(socket.getOutputStream)
+  //val out: MessagePacker = MessagePack.newDefaultPacker(socket.getOutputStream)
+  val out: MessageBufferPacker = MessagePack.newDefaultBufferPacker()
+  val outStream: OutputStream = socket.getOutputStream
 
   val stdout = new InputStreamReader(proc.getInputStream)
   val stderr = new InputStreamReader(proc.getErrorStream)
@@ -160,6 +168,15 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     }
   }
 
+  def assign(varName: String, value: AnyRef): Unit = {
+    sendAssn(varName, value)
+    val t = in.unpackInt()
+    redirectPipes()
+    if (t != 0) {
+      throw pythonException()
+    }
+  }
+
   def pythonException(): Exception ={
     val e = in.unpackString()
     val tb = in.unpackString()
@@ -169,18 +186,35 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   private def sendStmt(msg: String): Unit = {
     out.packInt(PythonSubprocess.stmtMsg)
     out.packString(msg)
-    out.flush()
+    //out.flush()
+    val bytes = out.toByteArray
+    outStream.write(bytes)
+    out.clear()
   }
 
   private def sendExpr(msg: String): Unit = {
     out.packInt(PythonSubprocess.exprMsg)
     out.packString(msg)
-    out.flush()
+    //out.flush()
+    outStream.write(out.toByteArray)
+    out.clear()
+  }
+
+  private def sendAssn(varName: String, value: AnyRef): Unit = {
+    out.packInt(PythonSubprocess.assnMsg)
+    out.packString(varName)
+    LogoPacker(out).pack(value)
+    //out.flush()
+    val bytes = out.toByteArray
+    println(bytes.length)
+    outStream.write(bytes)
+    out.clear()
   }
 
   def close(): Unit = {
     in.close()
     out.close()
+    outStream.close()
     socket.close()
     proc.destroy()
     proc.waitFor()
@@ -234,7 +268,8 @@ object RunResult extends api.Reporter {
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
   override def perform(args: Array[Argument], context: Context): Unit = {
-    PythonExtension.pythonProcess.exec(s"${args(0).getString} = ${convertToPython(args(1).get)}")
+    //PythonExtension.pythonProcess.exec(s"${args(0).getString} = ${convertToPython(args(1).get)}")
+    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
   }
 
   def convertToPython(x: AnyRef): String = x match {
@@ -247,7 +282,9 @@ object Set extends api.Command {
 
 case class LogoPacker(packer: MessagePacker) {
   def packNumber(x: JDouble): LogoPacker = {
-    packer.packDouble(x.doubleValue)
+    if (x == x.intValue) packer.packInt(x.intValue)
+    else if (x == x.floatValue) packer.packFloat(x.floatValue)
+    else packer.packDouble(x.doubleValue)
     this
   }
 
