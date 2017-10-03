@@ -1,17 +1,13 @@
 package org.nlogo.py
 
 import java.awt.GraphicsEnvironment
-import java.io.{File, IOException, InputStreamReader, OutputStream}
+import java.io.{BufferedInputStream, BufferedOutputStream, File, IOException, InputStreamReader}
 import java.lang.ProcessBuilder.Redirect
-import java.lang.{Boolean => JBoolean, Double => JDouble}
-import java.net.{InetSocketAddress, ServerSocket, Socket, SocketAddress}
-import java.nio.channels.SocketChannel
+import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
+import java.net.{ServerSocket, Socket}
 
-import org.msgpack.core.MessagePack.PackerConfig
-import org.msgpack.core.buffer.{MessageBuffer, MessageBufferOutput}
-import org.msgpack.core.{MessageBufferPacker, MessagePack, MessagePacker, MessageUnpacker}
-import org.msgpack.value.impl.ImmutableArrayValueImpl
-import org.msgpack.value.{ArrayValue, BinaryValue, BooleanValue, MapValue, NilValue, NumberValue, StringValue, Value}
+import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
+import org.json4s.jackson.JsonMethods.parse
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
@@ -123,11 +119,8 @@ object PythonSubprocess {
 }
 
 class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
-  socket.setSendBufferSize(8192)
-  val in: MessageUnpacker = MessagePack.newDefaultUnpacker(socket.getInputStream)
-  //val out: MessagePacker = MessagePack.newDefaultPacker(socket.getOutputStream)
-  val out: MessageBufferPacker = MessagePack.newDefaultBufferPacker()
-  val outStream: OutputStream = socket.getOutputStream
+  val in = new BufferedInputStream(socket.getInputStream)
+  val out = new BufferedOutputStream(socket.getOutputStream)
 
   val stdout = new InputStreamReader(proc.getInputStream)
   val stderr = new InputStreamReader(proc.getErrorStream)
@@ -149,7 +142,7 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
 
   def exec(stmt: String): Unit = {
     sendStmt(stmt)
-    val t = in.unpackInt()
+    val t = readByte()
     redirectPipes()
     if (t != 0) {
       throw pythonException()
@@ -158,11 +151,10 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
 
   def eval(expr: String): AnyRef = {
     sendExpr(expr)
-    val t = in.unpackInt()
+    val t = readByte()
     redirectPipes()
     if (t == 0) {
-      val x = in.unpackValue()
-      ConvertToLogo(x)
+      readLogo()
     } else {
       throw pythonException()
     }
@@ -170,7 +162,7 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
 
   def assign(varName: String, value: AnyRef): Unit = {
     sendAssn(varName, value)
-    val t = in.unpackInt()
+    val t = readByte()
     redirectPipes()
     if (t != 0) {
       throw pythonException()
@@ -178,43 +170,91 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   }
 
   def pythonException(): Exception ={
-    val e = in.unpackString()
-    val tb = in.unpackString()
+    val e = readString()
+    val tb = readString()
     new ExtensionException(e, new Exception(tb))
   }
 
   private def sendStmt(msg: String): Unit = {
-    out.packInt(PythonSubprocess.stmtMsg)
-    out.packString(msg)
-    //out.flush()
-    val bytes = out.toByteArray
-    outStream.write(bytes)
-    out.clear()
+    out.write(PythonSubprocess.stmtMsg)
+    writeString(msg)
+    out.flush()
   }
 
   private def sendExpr(msg: String): Unit = {
-    out.packInt(PythonSubprocess.exprMsg)
-    out.packString(msg)
-    //out.flush()
-    outStream.write(out.toByteArray)
-    out.clear()
+    out.write(PythonSubprocess.exprMsg)
+    writeString(msg)
+    out.flush()
   }
 
   private def sendAssn(varName: String, value: AnyRef): Unit = {
-    out.packInt(PythonSubprocess.assnMsg)
-    out.packString(varName)
-    LogoPacker(out).pack(value)
-    //out.flush()
-    val bytes = out.toByteArray
-    println(bytes.length)
-    outStream.write(bytes)
-    out.clear()
+    out.write(PythonSubprocess.assnMsg)
+    writeString(varName)
+    writeString(toJson(value))
+    out.flush()
+  }
+
+  private def read(numBytes: Int): Array[Byte] = Array.fill(numBytes)(readByte())
+
+  private def readByte(): Byte = {
+    val nextByte = in.read()
+    if (nextByte == -1) {
+      throw new ExtensionException("Python process quit unexpectedly")
+    }
+    nextByte.toByte
+  }
+
+  private def readInt(): Int = {
+    (readByte() << 24) & 0xff000000 |
+      (readByte() << 16) & 0x00ff0000 |
+      (readByte() << 8) & 0x0000ff00 |
+      (readByte() << 0) & 0x000000ff
+  }
+
+  private def readString(): String = {
+    val l = readInt()
+    val s = new String(read(l), "UTF-8")
+    s
+  }
+
+  private def readLogo(): AnyRef = toLogo(readString())
+
+  private def writeInt(i: Int): Unit = {
+    val a = Array((i >>> 24).toByte, (i >>> 16).toByte, (i >>> 8).toByte, i.toByte)
+    out.write(a)
+  }
+
+  private def writeString(str: String): Unit = {
+    val bytes = str.getBytes("UTF-8")
+    writeInt(bytes.length)
+    out.write(bytes)
+  }
+
+  def toJson(x: AnyRef): String = x match {
+    case l: LogoList => "[" + l.map(toJson).mkString(", ") + "]"
+    case b: java.lang.Boolean => if (b) "true" else "false"
+    case Nobody => "None"
+    case o => Dump.logoObject(o, readable = true, exporting = false)
+  }
+
+  def toLogo(s: String): AnyRef = toLogo(parse(s))
+  def toLogo(x: JValue): AnyRef = x match {
+    case JNothing => Nobody
+    case JNull => Nobody
+    case JString(s) => s
+    case JDouble(num) => num: JavaDouble
+    case JDecimal(num) => num.toDouble: JavaDouble
+    case JLong(num) => num.toDouble: JavaDouble
+    case JInt(num) => num.toDouble: JavaDouble
+    case JBool(value) => value: JavaBoolean
+    case JObject(obj) => LogoList.fromVector(obj.map(f => LogoList(f._1, toLogo(f._2))).toVector)
+    case JArray(arr) => LogoList.fromVector(arr.map(toLogo).toVector)
+    case JSet(set) => LogoList.fromVector(set.map(toLogo).toVector)
   }
 
   def close(): Unit = {
     in.close()
     out.close()
-    outStream.close()
     socket.close()
     proc.destroy()
     proc.waitFor()
@@ -267,73 +307,6 @@ object RunResult extends api.Reporter {
 
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
-  override def perform(args: Array[Argument], context: Context): Unit = {
-    //PythonExtension.pythonProcess.exec(s"${args(0).getString} = ${convertToPython(args(1).get)}")
+  override def perform(args: Array[Argument], context: Context): Unit =
     PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
-  }
-
-  def convertToPython(x: AnyRef): String = x match {
-    case l: LogoList => "[" + l.map(convertToPython).mkString(", ") + "]"
-    case b: java.lang.Boolean => if (b) "True" else "False"
-    case Nobody => "None"
-    case o => Dump.logoObject(o, readable = true, exporting = false)
-  }
-}
-
-case class LogoPacker(packer: MessagePacker) {
-  def packNumber(x: JDouble): LogoPacker = {
-    if (x == x.intValue) packer.packInt(x.intValue)
-    else if (x == x.floatValue) packer.packFloat(x.floatValue)
-    else packer.packDouble(x.doubleValue)
-    this
-  }
-
-  def packString(s: String): LogoPacker = {
-    packer.packString(s)
-    this
-  }
-
-  def packBoolean(b: JBoolean): LogoPacker = {
-    packer.packBoolean(b.booleanValue)
-    this
-  }
-
-  def packList(l: LogoList): LogoPacker = {
-    packer.packArrayHeader(l.length)
-    l.foreach(pack)
-    this
-  }
-
-  def packNobody(): LogoPacker = {
-    packer.packNil()
-    this
-  }
-
-  def pack(v: AnyRef): LogoPacker = {
-    v match {
-      case x: JDouble => packNumber(x)
-      case b: JBoolean => packBoolean(b)
-      case s: String => packString(s)
-      case l: LogoList => packList(l)
-      case Nobody => packNobody()
-    }
-    this
-  }
-}
-
-object ConvertToLogo {
-  def apply(v: Value): AnyRef = v match {
-    case _: NilValue => Nobody
-    case b: BooleanValue => b.getBoolean: JBoolean
-    case x: NumberValue => x.toDouble: JDouble
-    case s: StringValue => s.toString
-    case s: BinaryValue => s.toString
-    case a: ArrayValue => toLogoList(a)
-    case m: MapValue => toLogoList(m)
-  }
-
-  def toLogoList(a: ArrayValue): LogoList = LogoList.fromVector(a.asScala.map(apply).toVector)
-  def toLogoList(m: MapValue): LogoList = LogoList.fromVector(m.map.asScala.map{
-      case (k,v) => LogoList(apply(k), apply(v))
-    }.toVector)
 }

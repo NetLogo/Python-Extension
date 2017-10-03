@@ -16,4 +16,4 @@ scalaVersion := "2.12.2"
 
 scalaSource in Compile := baseDirectory.value / "src"
 
-libraryDependencies += "org.msgpack" % "msgpack-core" % "0.8.13"
+libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"

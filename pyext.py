@@ -7,8 +7,8 @@ import sys
 import numbers
 import json
 from collections import Mapping
-import umsgpack
 import traceback
+import struct
 
 
 LEN_SIZE = 10
@@ -32,48 +32,34 @@ class ConnectionReader(object):
     def __init__(self, conn):
         self.conn = conn
         self.buff = bytearray()
-        self._last_packet = bytes()
-        self._pos = 0
 
     def _get_packet(self):
-        data = self.conn.recv(8192)
+        data = self.conn.recv(1024)
         if not data:
             raise EOFError('Connection closed')
         return data
 
     def read(self, size):
-        #flush()
-        if self._pos >= len(self._last_packet):
-            self._last_packet = self._get_packet()
-            #self._pos = 0
-        #p = self._pos
-        if len(self._last_packet) > size:
-            result = self._last_packet[:size]
-            self._last_packet = self._last_packet[size:]
-            #self._pos += size
-        else:
-            self.buff = bytearray(self._last_packet)
-            while len(self.buff) < size:
-                self.buff.extend(self._get_packet())
-            bs = bytes(self.buff)
-            result = bs[:size]
-            self._last_packet = bs[size:]
-            #self._pos = 0
-
-        #result = bytes(self.buff[p:p + size])
-        #self._pos += size
-        #STORE LAST PACKET
-        #del self.buff[:size]
-        #print(str(list(result)))
-        #self._pos += size
-        #if self._pos >= len(self.buff):
-            #print('refresh buffer')
-            #self.buff.clear()
-            #self.buff = bytearray()
-            #self._pos = 0
-        #print('read {}'.format(len(result)))
-        #flush()
+        while len(self.buff) < size:
+            self.buff.extend(self._get_packet())
+        result = bytes(self.buff[:size])
+        del self.buff[:size]
         return result
+
+    def read_json(self):
+        return json.loads(self.read_string())
+
+    def read_int(self):
+        return struct.unpack('>i', self.read(4))[0]
+
+    def read_byte(self):
+        return struct.unpack('b', self.read(1))[0]
+
+    def read_string(self):
+        l = self.read_int()
+        s = self.read(l).decode('utf-8')
+        return s
+
 
 class ConnectionWriter(object):
     def __init__(self, conn):
@@ -82,6 +68,17 @@ class ConnectionWriter(object):
 
     def write(self, data):
         self.buff.extend(data)
+
+    def write_byte(self, b):
+        self.write(struct.pack('b', b))
+
+    def write_int(self, i):
+        self.write(struct.pack('>i', i))
+
+    def write_string(self, s):
+        bs = to_bytes(s)
+        self.write_int(len(bs))
+        self.write(bs)
 
     def flush(self):
         self.conn.sendall(self.buff)
@@ -102,35 +99,19 @@ def to_bytes(s):
     else:
         return bytes(s)
 
-def sanitize(x):
-    # Note: no `unicode` class in Python 3, so we have to check string
-    if isinstance(x, float) or \
-       isinstance(x, int) or \
-       isinstance(x, bool) or \
-       isinstance(x, str) or \
-       isinstance(x, bytes) or \
-       x.__class__.__name__ == 'unicode' or \
-       isinstance(x, None.__class__):
-        return x
-    elif isinstance(x, numbers.Number):
-        return float(x)
-    elif isinstance(x, Mapping):
-        return {sanitize(k): sanitize(v) for k,v in x.items()}
-    elif hasattr(x, '__len__'):
-        return [sanitize(y) for y in x]
-    else:
-        return repr(x)
+class FlexibleEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, numbers.Integral):
+            return int(o)
+        if isinstance(o, numbers.Number):
+            return float(o)
+        if isinstance(o, Mapping):
+            return dict(o)
+        elif hasattr(o, '__len__') and hasattr(o, '__iter__'):
+            return list(o)
+        else:
+            return json.JSONEncoder.default(self, o) # let it error
 
-
-def send(f, *args):
-    try:
-        sargs = [ sanitize(arg) for arg in args ]
-        for arg in sargs:
-            umsgpack.pack(arg, f)
-        f.flush()
-    except Exception as e:
-        f.clear()
-        raise
 
 def logo_responder(port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -142,29 +123,33 @@ def logo_responder(port):
         try:
             inp = ConnectionReader(conn)
             out = ConnectionWriter(conn)
+            encoder = FlexibleEncoder()
             globs = {}
             while True:
-                #print('getting new message')
-                msg_type = umsgpack.unpack(inp)
+                msg_type = inp.read_byte()
                 try:
                     if msg_type == STMT_MSG:
-                        code = umsgpack.unpack(inp)
+                        code = inp.read_string()
                         exec(code, globs)
-                        send(out, SUCC_MSG)
+                        out.write_byte(SUCC_MSG)
                     elif msg_type == EXPR_MSG:
-                        code = umsgpack.unpack(inp)
-                        result = eval(code, globs)
-                        send(out, SUCC_MSG, result)
+                        code = inp.read_string()
+                        result = encoder.encode(eval(code, globs))
+                        out.write_byte(SUCC_MSG)
+                        out.write_string(result)
                     elif msg_type == ASSN_MSG:
-                        var = umsgpack.unpack(inp)
-                        val = umsgpack.unpack(inp)
+                        var = inp.read_string()
+                        val = json.loads(inp.read_string())
                         globs[var] = val
-                        send(out, SUCC_MSG)
+                        out.write_byte(SUCC_MSG)
                     else:
                         raise Exception('Unrecognized message type: {}'.format(msg_type))
                 except Exception as e:
-                    send(out, ERR_MSG, str(e), traceback.format_exc())
+                    out.write_byte(ERR_MSG)
+                    out.write_string(str(e))
+                    out.write_string(traceback.format_exc())
                 finally:
+                    out.flush()
                     flush()
         finally:
             conn.close()
