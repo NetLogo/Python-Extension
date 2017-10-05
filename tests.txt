@@ -52,6 +52,11 @@ np-array-convert-to-lists-python2
   O> py:run "import numpy as np"
   py:runresult "np.array([1,2,3])" => [1 2 3]
 
+supports-utf8-python2
+  extensions [ py ]
+  O> py:setup "python2"
+  py:runresult "'😃'" => "😃"
+
 open-connection-python3
   extensions [ py ]
   O> py:setup "python3"
@@ -122,3 +127,8 @@ setup-takes-arguments-python3
   extensions [ py ]
   O> (py:setup "python3" "-O")
   py:runresult "0" => 0
+
+supports-utf8-python3
+  extensions [ py ]
+  O> py:setup "python3"
+  py:runresult "'😃'" => "😃"
