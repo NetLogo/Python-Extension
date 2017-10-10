@@ -7,7 +7,7 @@ turtles-own [
 
 to setup
   clear-all
-  py:setup "python3"
+  py:setup py:python
   (py:run
     "import numpy as np"
     "import sklearn.cluster as cl"

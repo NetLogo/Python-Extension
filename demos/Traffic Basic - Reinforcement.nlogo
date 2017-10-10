@@ -17,7 +17,7 @@ turtles-own [
 ]
 
 to setup-tf
-  py:setup "python3"
+  py:setup py:python
   (py:run
     "import numpy as np"
     "from keras.models import Sequential"
@@ -35,6 +35,13 @@ to setup
     [-> distance next-car]
     [-> [speed] of next-car]
   )
+
+  if fp-exp? [
+    set inputs lput [-> exp-rate ] inputs
+  ]
+  if fp-ticks? [
+    set inputs lput [-> ticks] inputs
+  ]
 
   py:set "state_dims" length inputs
   py:set "hl_size" 36
@@ -127,13 +134,17 @@ to select-actions
 
   (foreach turtle-list actions [ [t a] ->
     ask t [
-      ifelse random-float 1 < exploration-rate [
+      ifelse random-float 1 < exp-rate [
         set action random 3
       ] [
         set action a
       ]
     ]
   ])
+end
+
+to-report exp-rate
+  report exploration-rate / (1 + exploration-decay-rate * ticks)
 end
 
 to remember
@@ -191,12 +202,12 @@ end
 @#$#@#$#@
 GRAPHICS-WINDOW
 15
-425
-903
-589
+480
+703
+609
 -1
 -1
-17.255
+13.33333333333334
 1
 10
 1
@@ -218,9 +229,9 @@ ticks
 
 BUTTON
 110
-160
+190
 182
-201
+231
 NIL
 setup
 NIL
@@ -235,9 +246,9 @@ NIL
 
 BUTTON
 193
-161
+191
 264
-201
+231
 NIL
 go
 T
@@ -267,9 +278,9 @@ HORIZONTAL
 
 SLIDER
 15
-240
+270
 265
-273
+303
 deceleration
 deceleration
 0
@@ -282,14 +293,14 @@ HORIZONTAL
 
 SLIDER
 15
-205
+235
 265
-238
+268
 acceleration
 acceleration
 0
 .0099
-0.0045
+0.0044
 .0001
 1
 NIL
@@ -297,9 +308,9 @@ HORIZONTAL
 
 PLOT
 285
-10
+15
 705
-207
+212
 Car speeds
 time
 speed
@@ -317,9 +328,9 @@ PENS
 
 BUTTON
 15
-160
+190
 97
-200
+230
 NIL
 setup-tf
 NIL
@@ -334,9 +345,9 @@ NIL
 
 SLIDER
 15
-345
+410
 265
-378
+443
 discount
 discount
 0
@@ -349,14 +360,14 @@ HORIZONTAL
 
 SLIDER
 15
-310
+340
 265
-343
+373
 exploration-rate
 exploration-rate
 0
 1
-0.01
+1.0
 0.01
 1
 NIL
@@ -364,9 +375,9 @@ HORIZONTAL
 
 PLOT
 285
-205
+210
 705
-400
+405
 selected-actions
 NIL
 NIL
@@ -384,9 +395,9 @@ PENS
 
 SLIDER
 15
-275
+305
 265
-308
+338
 stop-penalty
 stop-penalty
 0
@@ -399,9 +410,9 @@ HORIZONTAL
 
 SWITCH
 15
-380
+445
 117
-413
+478
 train?
 train?
 0
@@ -452,6 +463,54 @@ learning-rate
 1
 NIL
 HORIZONTAL
+
+SLIDER
+15
+375
+265
+408
+exploration-decay-rate
+exploration-decay-rate
+0
+0.1
+0.01
+0.001
+1
+NIL
+HORIZONTAL
+
+MONITOR
+285
+405
+352
+450
+NIL
+exp-rate
+4
+1
+11
+
+SWITCH
+15
+155
+140
+188
+fp-exp?
+fp-exp?
+0
+1
+-1000
+
+SWITCH
+145
+155
+265
+188
+fp-ticks?
+fp-ticks?
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?

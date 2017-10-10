@@ -11,7 +11,7 @@ to setup
   clear-all
   ifelse netlogo-web? [set max-sheep 10000] [set max-sheep 30000]
 
-  py:setup "python3"
+  py:setup py:python
 
   (py:run
     "import numpy as np"

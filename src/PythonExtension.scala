@@ -1,7 +1,7 @@
 package org.nlogo.py
 
 import java.awt.GraphicsEnvironment
-import java.io.{BufferedInputStream, BufferedOutputStream, File, IOException, InputStreamReader}
+import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, File, IOException, InputStreamReader}
 import java.lang.ProcessBuilder.Redirect
 import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
@@ -40,7 +40,7 @@ object PythonSubprocess {
   val errorMsg = 1
 
 
-  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
+  def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
     val pyScript: String = new File(
       new File(
         // Getting the path straight from the URL will leave, eg, '%20's in the place of spaces. Converting to URI first
@@ -57,12 +57,12 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd, pyScript, port).asJava).directory(workingDirectory).redirectError(Redirect.INHERIT).redirectInput(Redirect.INHERIT)
+    val pb = new ProcessBuilder((cmdRunner :+ s"$pythonCmd '$pyScript' '$port'").asJava).directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
       // TODO: Better error message here
-      case e: IOException => throw new ExtensionException(s"Couldn't find Python executable: ${pythonCmd.head}", e)
+      case e: IOException => throw new ExtensionException(s"Failed to find execution shell. This is a bug. Please report.", e)
     }
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
@@ -74,12 +74,16 @@ object PythonSubprocess {
       }
     }
     if (!proc.isAlive) {
+      val stdout = readAllReady(new InputStreamReader(proc.getInputStream))
+      val stderr = readAllReady(new InputStreamReader(proc.getErrorStream))
+      val msg = (stderr, stdout) match {
+        case ("", s) => s
+        case (s, "") => s
+        case (e, o) => s"Error output:\n$e\n\nOutput:\n$o"
+      }
       throw new ExtensionException(
-        "Python process failed to start\n" +
-          "Output:\n" +
-          readAllReady(new InputStreamReader(proc.getInputStream)) + "\n\n" +
-          "Error output:\n" +
-          readAllReady(new InputStreamReader(proc.getErrorStream))
+        "Python process failed to start:\n" +
+        msg
       )
     }
     new PythonSubprocess(ws, proc, socket)
@@ -91,20 +95,73 @@ object PythonSubprocess {
     sb.toString
   }
 
+  private def cmdRunner: List[String] = {
+    val os = System.getProperty("os.name").toLowerCase
+    if (os.contains("mac") || os.contains("nix") || os.contains("nux") || os.contains("aix"))
+      List("/bin/bash", "-l", "-c")
+    else if(os.contains("win")) List("cmd.exe", "/C", "start")
+    else List.empty[String]
+  }
 
-  private def cmd(pythonCmd: Seq[String], pythonScript: String, port: Int): Seq[String] = {
+  def python2: Option[File] =
+    pythons.filter(_.version._1 == 2).sortBy(_.version).reverse.headOption.map(_.file)
+
+  def python3: Option[File] =
+    pythons.filter(_.version._1 == 3).sortBy(_.version).reverse.headOption.map(_.file)
+
+  def anyPython: Option[File] =
+    pythons.sortBy(_.version).reverse.headOption.map(_.file)
+
+  case class PythonBinary(file: File, version: (Int, Int, Int))
+
+  def pythons: Seq[PythonBinary] =
+    path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*")))
+        .groupBy(f => f.getCanonicalPath) // Users often have python, python3, python3.6, etc that are the same
+        .values
+      // Give e.g.
+      // /usr/local/bin/python3
+      // instead of
+      // /usr/local/Cellar/Frameworks/Python.framework/Versions/3.6/bin/python3
+        .map(_.minBy(_.getAbsolutePath.length))
+        .flatMap(pythonBinary).toSeq
+
+  def path: Seq[File] = {
+    val basePath = System.getenv("PATH")
     val os = System.getProperty("os.name").toLowerCase
 
-    val cmd = if (os.contains("mac") && System.getenv("PATH") == "/usr/bin:/bin:/usr/sbin:/sbin")
-      // On MacOS, .app files are executed with a neutered PATH environment variable. The problem is that if users are
-      // using Homebrew Python or similar, it won't be on that PATH. So, we check if we're on MacOS and if we have that
-      // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
-      // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
-      List("/bin/bash", "-c",
-        s"eval $$(/usr/libexec/path_helper -s) ; ${pythonCmd.map(a => s"'$a'").mkString(" ")} '$pythonScript' $port")
+    val unsplitPath = if (os.contains("mac") && basePath == "/usr/bin:/bin:/usr/sbin:/sbin")
+    // On MacOS, .app files are executed with a neutered PATH environment variable. The problem is that if users are
+    // using Homebrew Python or similar, it won't be on that PATH. So, we check if we're on MacOS and if we have that
+    // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
+    // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
+      getCmdOutput("/bin/bash", "-l", "-c", "echo $PATH").head ++ basePath
     else
-      pythonCmd ++ Seq(pythonScript, port.toString)
-    cmd
+      basePath
+    unsplitPath.split(File.pathSeparatorChar).map(new File(_)).filter(f => f.isDirectory)
+  }
+
+  def pythonBinary(f: File): Option[PythonBinary] = {
+    try {
+      val proc = new ProcessBuilder(f.getAbsolutePath, "-V")
+        .redirectError(Redirect.PIPE)
+        .redirectInput(Redirect.PIPE)
+        .start()
+      Option(new BufferedReader(new InputStreamReader(proc.getInputStream)).readLine()).orElse(
+        Option(new BufferedReader(new InputStreamReader(proc.getErrorStream)).readLine())
+      ).flatMap { verString =>
+        val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(verString)
+        if (m.groupCount == 3) Some(PythonBinary(f, (m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)))
+        else None
+      }
+    } catch {
+      case _: IOException => None
+      case _: SecurityException => None
+    }
+  }
+  private def getCmdOutput(cmd: String*): List[String] = {
+    val proc = new ProcessBuilder(cmd: _*).redirectError(Redirect.PIPE).redirectInput(Redirect.PIPE).start()
+    val in = new BufferedReader(new InputStreamReader(proc.getInputStream))
+    Iterator.continually(in.readLine()).takeWhile(_ != null).toList
   }
 
   private def findOpenPort: Int = {
@@ -267,6 +324,9 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("run", Run)
     manager.addPrimitive("runresult", RunResult)
     manager.addPrimitive("set", Set)
+    manager.addPrimitive("python2", FindPython(PythonSubprocess.python2 _))
+    manager.addPrimitive("python3", FindPython(PythonSubprocess.python3 _))
+    manager.addPrimitive("python", FindPython(PythonSubprocess.anyPython _))
   }
 
   override def unload(em: ExtensionManager): Unit = {
@@ -282,7 +342,7 @@ object SetupPython extends api.Command {
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     context.workspace.getModelDir
-    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args.map(_.getString))
+    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args(0).getString)
   }
 }
 
@@ -295,6 +355,15 @@ object Run extends api.Command {
     PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
 }
 
+case class FindPython(pyFinder: () => Option[File]) extends api.Reporter {
+  override def report(args: Array[Argument], context: Context): String =
+    pyFinder().getOrElse(
+      throw new ExtensionException("Couldn't find Python. Try specifying an exact path.")
+    ).getAbsolutePath
+
+  override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.StringType)
+
+}
 object RunResult extends api.Reporter {
   override def getSyntax: Syntax = Syntax.reporterSyntax(
     right = List(Syntax.StringType | Syntax.RepeatableType),
