@@ -40,7 +40,7 @@ object PythonSubprocess {
   val errorMsg = 1
 
 
-  def start(ws: Workspace, pythonCmd: String): PythonSubprocess = {
+  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
     val pyScript: String = new File(
       new File(
         // Getting the path straight from the URL will leave, eg, '%20's in the place of spaces. Converting to URI first
@@ -57,7 +57,7 @@ object PythonSubprocess {
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder((cmdRunner :+ s"$pythonCmd '$pyScript' '$port'").asJava).directory(workingDirectory)
+    val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript :+ port.toString).asJava).directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
@@ -95,14 +95,15 @@ object PythonSubprocess {
     sb.toString
   }
 
-  private def cmdRunner: List[String] = {
+  private def cmd(args: Seq[String]): Seq[String] = {
     val os = System.getProperty("os.name").toLowerCase
-    if (os.contains("mac") || os.contains("nix") || os.contains("nux") || os.contains("aix"))
-      List("/bin/bash", "-l", "-c")
-    else if(os.contains("win")) List("cmd.exe", "/C", "start")
-    else List.empty[String]
+    if (os.contains("mac"))
+      List("/bin/bash", "-l", "-c", args.map(a => s"'$a'").mkString(" "))
+    else
+      args
   }
 
+  // TODO: These should respect order in PATH, not use latest
   def python2: Option[File] =
     pythons.filter(_.version._1 == 2).sortBy(_.version).reverse.headOption.map(_.file)
 
@@ -114,8 +115,10 @@ object PythonSubprocess {
 
   case class PythonBinary(file: File, version: (Int, Int, Int))
 
+  // TODO: Make this lazy
   def pythons: Seq[PythonBinary] =
-    path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*")))
+    path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
+      // TODO: The problem with this groupby is that it ignores ordering in PATH.
         .groupBy(f => f.getCanonicalPath) // Users often have python, python3, python3.6, etc that are the same
         .values
       // Give e.g.
@@ -125,6 +128,7 @@ object PythonSubprocess {
         .map(_.minBy(_.getAbsolutePath.length))
         .flatMap(pythonBinary).toSeq
 
+  // TODO: Add obvious OS-specific locations to END of PATH
   def path: Seq[File] = {
     val basePath = System.getenv("PATH")
     val os = System.getProperty("os.name").toLowerCase
@@ -327,6 +331,7 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("python2", FindPython(PythonSubprocess.python2 _))
     manager.addPrimitive("python3", FindPython(PythonSubprocess.python3 _))
     manager.addPrimitive("python", FindPython(PythonSubprocess.anyPython _))
+    manager.addPrimitive("__path", Path)
   }
 
   override def unload(em: ExtensionManager): Unit = {
@@ -342,7 +347,7 @@ object SetupPython extends api.Command {
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     context.workspace.getModelDir
-    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args(0).getString)
+    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args.map(_.getString))
   }
 }
 
@@ -362,7 +367,13 @@ case class FindPython(pyFinder: () => Option[File]) extends api.Reporter {
     ).getAbsolutePath
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.StringType)
+}
 
+object Path extends api.Reporter {
+  override def report(args: Array[Argument], context: Context): LogoList =
+    LogoList.fromVector(PythonSubprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
+
+  override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
 }
 object RunResult extends api.Reporter {
   override def getSyntax: Syntax = Syntax.reporterSyntax(
