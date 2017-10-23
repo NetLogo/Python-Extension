@@ -103,32 +103,19 @@ object PythonSubprocess {
       args
   }
 
-  // TODO: These should respect order in PATH, not use latest
-  def python2: Option[File] =
-    pythons.filter(_.version._1 == 2).sortBy(_.version).reverse.headOption.map(_.file)
+  def python2: Option[File] = pythons.find(_.version._1 == 2).map(_.file)
 
-  def python3: Option[File] =
-    pythons.filter(_.version._1 == 3).sortBy(_.version).reverse.headOption.map(_.file)
+  def python3: Option[File] = pythons.find(_.version._1 == 3).map(_.file)
 
-  def anyPython: Option[File] =
-    pythons.sortBy(_.version).reverse.headOption.map(_.file)
+  def anyPython: Option[File] = python3 orElse python2
 
   case class PythonBinary(file: File, version: (Int, Int, Int))
 
-  // TODO: Make this lazy
-  def pythons: Seq[PythonBinary] =
-    path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
-      // TODO: The problem with this groupby is that it ignores ordering in PATH.
-        .groupBy(f => f.getCanonicalPath) // Users often have python, python3, python3.6, etc that are the same
-        .values
-      // Give e.g.
-      // /usr/local/bin/python3
-      // instead of
-      // /usr/local/Cellar/Frameworks/Python.framework/Versions/3.6/bin/python3
-        .map(_.minBy(_.getAbsolutePath.length))
-        .flatMap(pythonBinary).toSeq
+  def pythons: Stream[PythonBinary] =
+    path.toStream
+      .flatMap(_.listFiles((_, name) => name.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
+      .flatMap(pythonBinary)
 
-  // TODO: Add obvious OS-specific locations to END of PATH
   def path: Seq[File] = {
     val basePath = System.getenv("PATH")
     val os = System.getProperty("os.name").toLowerCase

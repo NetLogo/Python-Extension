@@ -146,7 +146,7 @@ supports-utf8-python3
   O> py:setup py:python3
   py:runresult "'😃'" => "😃"
 
-python-gets-latest-version
+python-prefers-3
   extensions [ py ]
   O> py:setup py:python
   O> py:run "import sys"
