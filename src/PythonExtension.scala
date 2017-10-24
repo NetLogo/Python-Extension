@@ -1,15 +1,17 @@
 package org.nlogo.py
 
 import java.awt.GraphicsEnvironment
-import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, File, IOException, InputStreamReader}
+import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, Closeable, File, FileInputStream, FileOutputStream, IOException, InputStreamReader}
 import java.lang.ProcessBuilder.Redirect
 import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
+import java.util.Properties
 
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
 import org.json4s.jackson.JsonMethods.parse
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
+import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
 import org.nlogo.workspace.AbstractWorkspace
 
@@ -18,13 +20,84 @@ import scala.collection.JavaConverters._
 object PythonExtension {
   private var _pythonProcess: Option[PythonSubprocess] = None
 
+  val extDirectory: File = new File(
+    getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
+  ).getParentFile
+
+  val config: PythonConfig = PythonConfig(new File(extDirectory, "python.properties"))
+
   def pythonProcess: PythonSubprocess = _pythonProcess.getOrElse(throw new ExtensionException("Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
 
   def pythonProcess_=(proc: PythonSubprocess): Unit = {
     _pythonProcess.foreach(_.close())
     _pythonProcess =  Some(proc)
   }
+
+  def isHeadless: Boolean = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
 }
+
+object Using {
+  def apply[A <: Closeable, B](resource: A)(fn: A => B): B =
+    apply(resource, (x: A) => x.close())(fn)
+  def apply[A,B](resource: A, cleanup: A => Unit)(fn: A => B): B =
+    try fn(resource) finally if (resource != null) cleanup(resource)
+}
+
+case class PythonConfig(configFile: File) {
+  val py2Key: String = "python2"
+  val py3Key: String = "python3"
+
+
+  def properties: Option[Properties] = if (configFile.exists)
+    Using(new FileInputStream(configFile)) { f =>
+      val props = new Properties
+      props.load(f)
+      Some(props)
+    }
+  else None
+
+  def setProperty(key: String, value: String): Unit = {
+    val props = properties.getOrElse(new Properties)
+    props.setProperty(key, value)
+    Using(new FileOutputStream(configFile)) { f =>
+      props.store(f, "")
+    }
+  }
+
+  def python2: Option[String] =
+    properties.flatMap(p => Option(p.getProperty(py2Key))).flatMap(p => if (p.trim.isEmpty) None else Some(p))
+
+  def python2_= (p: String): Unit = setProperty(py2Key, p)
+
+  def python3: Option[String] =
+    properties.flatMap(p => Option(p.getProperty(py3Key))).flatMap(p => if (p.trim.isEmpty) None else Some(p))
+
+  def python3_= (p: String): Unit = setProperty(py3Key, p)
+}
+
+object PythonBinary {
+  def fromPath(s: String): Option[PythonBinary] = fromFile(new File(s))
+  def fromFile(f: File): Option[PythonBinary] = {
+    try {
+      val proc = new ProcessBuilder(f.getAbsolutePath, "-V")
+        .redirectError(Redirect.PIPE)
+        .redirectInput(Redirect.PIPE)
+        .start()
+      Option(new BufferedReader(new InputStreamReader(proc.getInputStream)).readLine()).orElse(
+        Option(new BufferedReader(new InputStreamReader(proc.getErrorStream)).readLine())
+      ).flatMap { verString =>
+        val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(verString)
+        if (m.groupCount == 3) Some(PythonBinary(f, (m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)))
+        else None
+      }
+    } catch {
+      case _: IOException => None
+      case _: SecurityException => None
+    }
+  }
+}
+
+case class PythonBinary(file: File, version: (Int, Int, Int))
 
 object PythonSubprocess {
   // In and out
@@ -41,14 +114,7 @@ object PythonSubprocess {
 
 
   def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
-    val pyScript: String = new File(
-      new File(
-        // Getting the path straight from the URL will leave, eg, '%20's in the place of spaces. Converting to URI first
-        // seems to prevent that.
-        PythonExtension.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
-      ).getParentFile,
-      "pyext.py"
-    ).toString
+    val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
 
     val port = findOpenPort
     ws.getExtensionManager
@@ -103,18 +169,18 @@ object PythonSubprocess {
       args
   }
 
-  def python2: Option[File] = pythons.find(_.version._1 == 2).map(_.file)
+  def python2: Option[File] =
+    PythonExtension.config.python2.map(new File(_)).orElse(pythons.find(_.version._1 == 2).map(_.file))
 
-  def python3: Option[File] = pythons.find(_.version._1 == 3).map(_.file)
+  def python3: Option[File] =
+    PythonExtension.config.python3.map(new File(_)).orElse(pythons.find(_.version._1 == 3).map(_.file))
 
   def anyPython: Option[File] = python3 orElse python2
-
-  case class PythonBinary(file: File, version: (Int, Int, Int))
 
   def pythons: Stream[PythonBinary] =
     path.toStream
       .flatMap(_.listFiles((_, name) => name.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
-      .flatMap(pythonBinary)
+      .flatMap(PythonBinary.fromFile)
 
   def path: Seq[File] = {
     val basePath = System.getenv("PATH")
@@ -131,24 +197,6 @@ object PythonSubprocess {
     unsplitPath.split(File.pathSeparatorChar).map(new File(_)).filter(f => f.isDirectory)
   }
 
-  def pythonBinary(f: File): Option[PythonBinary] = {
-    try {
-      val proc = new ProcessBuilder(f.getAbsolutePath, "-V")
-        .redirectError(Redirect.PIPE)
-        .redirectInput(Redirect.PIPE)
-        .start()
-      Option(new BufferedReader(new InputStreamReader(proc.getInputStream)).readLine()).orElse(
-        Option(new BufferedReader(new InputStreamReader(proc.getErrorStream)).readLine())
-      ).flatMap { verString =>
-        val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(verString)
-        if (m.groupCount == 3) Some(PythonBinary(f, (m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)))
-        else None
-      }
-    } catch {
-      case _: IOException => None
-      case _: SecurityException => None
-    }
-  }
   private def getCmdOutput(cmd: String*): List[String] = {
     val proc = new ProcessBuilder(cmd: _*).redirectError(Redirect.PIPE).redirectInput(Redirect.PIPE).start()
     val in = new BufferedReader(new InputStreamReader(proc.getInputStream))
@@ -321,6 +369,16 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("__path", Path)
   }
 
+  override def runOnce(em: ExtensionManager): Unit = {
+    super.runOnce(em)
+
+    if (!PythonExtension.isHeadless) {
+      val menuBar = App.app.frame.getJMenuBar
+      menuBar.getComponents.find(_.getName == PythonMenu).getOrElse {
+        menuBar.add(new PythonMenu)
+      }
+    }
+  }
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension._pythonProcess.foreach(_.close())
