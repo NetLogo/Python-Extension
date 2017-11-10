@@ -26,7 +26,9 @@ object PythonExtension {
 
   val config: PythonConfig = PythonConfig(new File(extDirectory, "python.properties"))
 
-  def pythonProcess: PythonSubprocess = _pythonProcess.getOrElse(throw new ExtensionException("Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
+  def pythonProcess: PythonSubprocess =
+    _pythonProcess.getOrElse(throw new ExtensionException(
+      "Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
 
   def pythonProcess_=(proc: PythonSubprocess): Unit = {
     _pythonProcess.foreach(_.close())
@@ -48,13 +50,13 @@ case class PythonConfig(configFile: File) {
   val py3Key: String = "python3"
 
 
-  def properties: Option[Properties] = if (configFile.exists)
+  def properties: Option[Properties] = if (configFile.exists) {
     Using(new FileInputStream(configFile)) { f =>
       val props = new Properties
       props.load(f)
       Some(props)
     }
-  else None
+  } else None
 
   def setProperty(key: String, value: String): Unit = {
     val props = properties.getOrElse(new Properties)
@@ -363,9 +365,44 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("run", Run)
     manager.addPrimitive("runresult", RunResult)
     manager.addPrimitive("set", Set)
-    manager.addPrimitive("python2", FindPython(PythonSubprocess.python2 _))
-    manager.addPrimitive("python3", FindPython(PythonSubprocess.python3 _))
-    manager.addPrimitive("python", FindPython(PythonSubprocess.anyPython _))
+    manager.addPrimitive("python2",
+      FindPython(
+        PythonSubprocess.python2 _,
+        ConfigDialog.configurePython2,
+        () => PythonExtension.config.python2)
+    )
+    manager.addPrimitive("python3",
+      FindPython(
+        PythonSubprocess.python3 _,
+        ConfigDialog.configurePython3,
+        () => PythonExtension.config.python3)
+    )
+    manager.addPrimitive("python",
+      FindPython(
+        PythonSubprocess.anyPython _,
+        ConfigDialog.configureEither,
+        () => PythonExtension.config.python3 orElse PythonExtension.config.python2
+      )
+    )
+    manager.addPrimitive("__python2",
+      FindPython(
+        () => None,
+        ConfigDialog.configurePython2,
+        () => PythonExtension.config.python2)
+    )
+    manager.addPrimitive("__python3",
+      FindPython(
+        () => None,
+        ConfigDialog.configurePython3,
+        () => PythonExtension.config.python3)
+    )
+    manager.addPrimitive("__python",
+      FindPython(
+        () => None,
+        ConfigDialog.configureEither,
+        () => PythonExtension.config.python3 orElse PythonExtension.config.python2
+      )
+    )
     manager.addPrimitive("__path", Path)
   }
 
@@ -374,7 +411,7 @@ class PythonExtension extends api.DefaultClassManager {
 
     if (!PythonExtension.isHeadless) {
       val menuBar = App.app.frame.getJMenuBar
-      menuBar.getComponents.find(_.getName == PythonMenu).getOrElse {
+      menuBar.getComponents.find(_.getName == PythonMenu.name).getOrElse {
         menuBar.add(new PythonMenu)
       }
     }
@@ -405,11 +442,22 @@ object Run extends api.Command {
     PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
 }
 
-case class FindPython(pyFinder: () => Option[File]) extends api.Reporter {
+case class FindPython(
+  pyFinder: () => Option[File],
+  showConfig: () => Unit,
+  getConfig: () => Option[String]) extends api.Reporter {
+
   override def report(args: Array[Argument], context: Context): String =
-    pyFinder().getOrElse(
-      throw new ExtensionException("Couldn't find Python. Try specifying an exact path.")
-    ).getAbsolutePath
+    pyFinder().map(_.getAbsolutePath).orElse(
+      if (PythonExtension.isHeadless)
+        None
+      else {
+        showConfig()
+        getConfig()
+      }
+    ).getOrElse {
+      throw new ExtensionException("Couldn't find Python 2. Try specifying an exact path or configuring a default Python 2.")
+    }
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.StringType)
 }
