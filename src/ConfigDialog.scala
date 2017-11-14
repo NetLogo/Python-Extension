@@ -1,58 +1,84 @@
 package org.nlogo.py
 
+import java.awt.{BorderLayout, FileDialog, GridBagLayout, Insets, GridBagConstraints => GBC}
 import java.io.File
-import javax.swing.{JFileChooser, JMenu, SwingUtilities}
+import javax.swing.{BorderFactory, JButton, JDialog, JFrame, JLabel, JMenu, JPanel, JTextField}
 
 import org.nlogo.app.App
-import org.nlogo.awt.UserCancelException
-import org.nlogo.swing.{FileDialog, MessageDialog, OptionDialog}
+import org.nlogo.core.I18N
+import org.nlogo.swing.{ButtonPanel, RichAction, RichJButton, Utils}
 
-object ConfigDialog {
-  def configurePython2(): Unit =
-    askForPyPath("Python 2", PythonSubprocess.python2)
-      .foreach(PythonExtension.config.python2 = _)
+class ConfigEditor(owner: JFrame, config: PythonConfig) extends JDialog(owner, "Python configuration") {
+  private val python2TextField = new JTextField(config.python2.getOrElse(""), 20)
+  private val python3TextField = new JTextField(config.python3.getOrElse(""), 20)
 
-  def configurePython3(): Unit =
-    askForPyPath("Python 3", PythonSubprocess.python3)
-      .foreach(PythonExtension.config.python3 = _)
+  {
+    getContentPane.setLayout(new BorderLayout)
+    val mainPanel = new JPanel
+    mainPanel.setLayout(new BorderLayout)
+    mainPanel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5))
+    getContentPane.add(mainPanel, BorderLayout.CENTER)
 
-  def configureEither(): Unit = onEDT {
-    OptionDialog.showMessage(App.app.frame,
-      "Configure Python extension",
-      "Which version of Python would you like to configure?",
-      Array("Python 3", "Python 2")
-    ) match {
-      case 0 => configurePython2()
-      case 1 => configurePython3()
+    val editPanel = new JPanel
+    editPanel.setLayout(new GridBagLayout)
+    editPanel.add(new JLabel("Python 2:"), Constraints())
+    editPanel.add(python2TextField, Constraints(weightx = 1.0, fill = GBC.HORIZONTAL))
+    editPanel.add(RichJButton("Select...") {
+      askForPyPath("Python 2", python2TextField.getText).foreach(python2TextField.setText)
+    }, Constraints())
+
+    editPanel.add(new JLabel("Python 3:"), Constraints(gridy = 1))
+    editPanel.add(python3TextField, Constraints(gridy = 1,weightx = 1.0, fill = GBC.HORIZONTAL))
+    editPanel.add(RichJButton("Select...") {
+      askForPyPath("Python 3", python3TextField.getText).foreach(python3TextField.setText)
+    }, Constraints(gridy = 1))
+
+    val okButton = RichJButton(I18N.gui.get("common.buttons.ok")) {
+      save()
+      dispose()
     }
+    val cancelAction = RichAction(I18N.gui.get("common.buttons.cancel"))(_ => dispose())
+    val buttonPanel = ButtonPanel(
+      okButton,
+      new JButton(cancelAction)
+    )
+    getRootPane.setDefaultButton(okButton)
+    Utils.addEscKeyAction(this, cancelAction)
+
+    mainPanel.add(editPanel, BorderLayout.CENTER)
+    mainPanel.add(buttonPanel, BorderLayout.SOUTH)
+    pack()
   }
 
-  def onEDT[R](body: =>R): R =
-    if (SwingUtilities.isEventDispatchThread)
-      body
-    else
-      App.app.workspace.waitForResult(() => body)
+  def askForPyPath(name: String, current: String): Option[String] = {
+    val dialog = new FileDialog(this, s"Configure {name}", FileDialog.LOAD)
+    dialog.setDirectory(new File(current).getParent)
+    dialog.setFile(new File(current).getName)
+    dialog.setVisible(true)
+    Option(dialog.getFile).map(Option(dialog.getDirectory).getOrElse("") + _)
+  }
 
-  protected def askForPyPath(name: String, current: Option[File]): Option[String] =
-    onEDT {
-      try {
-        /*
-        val chooser = new JFileChooser()
-        current.foreach(chooser.setSelectedFile)
-        if (chooser.showDialog(App.app.frame, "Select") == JFileChooser.APPROVE_OPTION)
-          Some(chooser.getSelectedFile.getAbsolutePath)
-        else
-          None
-          */
+  def save(): Unit = {
+    if (python2TextField.getText.nonEmpty) config.python2 = python2TextField.getText
+    if (python3TextField.getText.nonEmpty) config.python3 = python3TextField.getText
+  }
+}
 
+object Constraints {
+  def apply(
+    gridx  : Integer = GBC.RELATIVE,
+    gridy  : Integer = GBC.RELATIVE,
+    gridw  : Integer = 1,
+    gridh  : Integer = 1,
+    weightx: Double  = 0.0,
+    weighty: Double  = 0.0,
+    anchor : Integer = GBC.CENTER,
+    fill   : Integer = GBC.NONE,
+    insets : Insets  = new Insets(0, 0, 0, 0),
+    ipadx  : Integer = 0,
+    ipady  : Integer = 0) =
 
-        Option(FileDialog.showFiles(App.app.frame, s"Configure $name",
-          java.awt.FileDialog.LOAD,
-          current.map(_.getAbsolutePath).getOrElse("")))
-      } catch {
-        case _: UserCancelException => None
-      }
-    }
+    new GBC(gridx, gridy, gridw, gridh, weightx, weighty, anchor, fill, insets, ipadx, ipady)
 }
 
 object PythonMenu {
@@ -60,6 +86,7 @@ object PythonMenu {
 }
 
 class PythonMenu extends JMenu("Python") {
-  add("Configure Python 2").addActionListener(_ => ConfigDialog.configurePython2())
-  add("Configure Python 3").addActionListener(_ => ConfigDialog.configurePython3())
+  add("Configure").addActionListener{ _ =>
+    new ConfigEditor(App.app.frame, PythonExtension.config).setVisible(true)
+  }
 }

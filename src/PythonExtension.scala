@@ -36,6 +36,8 @@ object PythonExtension {
   }
 
   def isHeadless: Boolean = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
+
+  def pythonNotFound = throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the configuration menu.")
 }
 
 object Using {
@@ -368,38 +370,16 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("python2",
       FindPython(
         PythonSubprocess.python2 _,
-        ConfigDialog.configurePython2,
-        () => PythonExtension.config.python2)
+        PythonExtension.config.python2 _)
     )
     manager.addPrimitive("python3",
       FindPython(
         PythonSubprocess.python3 _,
-        ConfigDialog.configurePython3,
-        () => PythonExtension.config.python3)
+        PythonExtension.config.python3 _)
     )
     manager.addPrimitive("python",
       FindPython(
         PythonSubprocess.anyPython _,
-        ConfigDialog.configureEither,
-        () => PythonExtension.config.python3 orElse PythonExtension.config.python2
-      )
-    )
-    manager.addPrimitive("__python2",
-      FindPython(
-        () => None,
-        ConfigDialog.configurePython2,
-        () => PythonExtension.config.python2)
-    )
-    manager.addPrimitive("__python3",
-      FindPython(
-        () => None,
-        ConfigDialog.configurePython3,
-        () => PythonExtension.config.python3)
-    )
-    manager.addPrimitive("__python",
-      FindPython(
-        () => None,
-        ConfigDialog.configureEither,
         () => PythonExtension.config.python3 orElse PythonExtension.config.python2
       )
     )
@@ -444,7 +424,6 @@ object Run extends api.Command {
 
 case class FindPython(
   pyFinder: () => Option[File],
-  showConfig: () => Unit,
   getConfig: () => Option[String]) extends api.Reporter {
 
   override def report(args: Array[Argument], context: Context): String =
@@ -452,8 +431,7 @@ case class FindPython(
       if (PythonExtension.isHeadless)
         None
       else {
-        showConfig()
-        getConfig()
+        PythonExtension.pythonNotFound
       }
     ).getOrElse {
       throw new ExtensionException("Couldn't find Python 2. Try specifying an exact path or configuring a default Python 2.")
