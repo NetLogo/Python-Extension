@@ -7,12 +7,15 @@ import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
 import java.util.Properties
 
+import com.fasterxml.jackson.core.JsonParser
+import jdk.nashorn.internal.parser.JSONParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
-import org.json4s.jackson.JsonMethods.parse
+import org.json4s.jackson.JsonMethods.{mapper, parse}
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
+import org.nlogo.nvm.ExtensionContext
 import org.nlogo.workspace.AbstractWorkspace
 
 import scala.collection.JavaConverters._
@@ -38,6 +41,12 @@ object PythonExtension {
   def isHeadless: Boolean = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
 
   def pythonNotFound = throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the configuration menu.")
+
+  def validNum(d: Double): Double = d match {
+    case x if x.isInfinite => throw new ExtensionException("Python reported a number too large for NetLogo.")
+    case x if x.isNaN => throw new ExtensionException("Python reported a non-numeric value from a mathematical operation.")
+    case x => x
+  }
 }
 
 object Using {
@@ -342,10 +351,10 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     case JNothing => Nobody
     case JNull => Nobody
     case JString(s) => s
-    case JDouble(num) => num: JavaDouble
-    case JDecimal(num) => num.toDouble: JavaDouble
-    case JLong(num) => num.toDouble: JavaDouble
-    case JInt(num) => num.toDouble: JavaDouble
+    case JDouble(num) => PythonExtension.validNum(num): JavaDouble
+    case JDecimal(num) => PythonExtension.validNum(num.toDouble): JavaDouble
+    case JLong(num) => PythonExtension.validNum(num.toDouble): JavaDouble
+    case JInt(num) => PythonExtension.validNum(num.toDouble): JavaDouble
     case JBool(value) => value: JavaBoolean
     case JObject(obj) => LogoList.fromVector(obj.map(f => LogoList(f._1, toLogo(f._2))).toVector)
     case JArray(arr) => LogoList.fromVector(arr.map(toLogo).toVector)
@@ -388,6 +397,7 @@ class PythonExtension extends api.DefaultClassManager {
 
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
+    mapper.configure(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
     if (!PythonExtension.isHeadless) {
       val menuBar = App.app.frame.getJMenuBar
@@ -446,6 +456,7 @@ object Path extends api.Reporter {
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
 }
+
 object RunResult extends api.Reporter {
   override def getSyntax: Syntax = Syntax.reporterSyntax(
     right = List(Syntax.StringType | Syntax.RepeatableType),

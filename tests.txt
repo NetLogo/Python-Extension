@@ -64,6 +64,16 @@ supports-utf8-python2
   O> py:setup py:python2
   py:runresult "'😃'" => "😃"
 
+errors-on-nan-python2
+  extensions [ py ]
+  O> py:setup py:python2
+  py:runresult "float('nan')" => ERROR Extension exception: Python reported a non-numeric value from a mathematical operation.
+
+errors-on-infinity-python2
+  extensions [ py ]
+  O> py:setup py:python2
+  py:runresult "float('inf')" => ERROR Extension exception: Python reported a number too large for NetLogo.
+
 open-connection-python3
   extensions [ py ]
   O> py:setup py:python3
@@ -151,3 +161,13 @@ python-prefers-3
   O> py:setup py:python
   O> py:run "import sys"
   py:runresult "sys.version_info[0]" => 3
+
+errors-on-nan-python3
+  extensions [ py ]
+  O> py:setup py:python3
+  py:runresult "float('nan')" => ERROR Extension exception: Python reported a non-numeric value from a mathematical operation.
+
+errors-on-infinity-python3
+  extensions [ py ]
+  O> py:setup py:python3
+  py:runresult "float('inf')" => ERROR Extension exception: Python reported a number too large for NetLogo.
