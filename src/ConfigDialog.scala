@@ -21,17 +21,22 @@ class ConfigEditor(owner: JFrame, config: PythonConfig) extends JDialog(owner, "
 
     val editPanel = new JPanel
     editPanel.setLayout(new GridBagLayout)
-    editPanel.add(new JLabel("Python 2:"), Constraints())
-    editPanel.add(python2TextField, Constraints(weightx = 1.0, fill = GBC.HORIZONTAL))
-    editPanel.add(RichJButton("Select...") {
-      askForPyPath("Python 2", python2TextField.getText).foreach(python2TextField.setText)
-    }, Constraints())
 
-    editPanel.add(new JLabel("Python 3:"), Constraints(gridy = 1))
-    editPanel.add(python3TextField, Constraints(gridy = 1,weightx = 1.0, fill = GBC.HORIZONTAL))
-    editPanel.add(RichJButton("Select...") {
+    editPanel.add(new JLabel(
+      "Enter the path to your Python executable. If blank, the py extension will attempt to find an appropriate version of Python."
+    ), Constraints(gridx=0, gridw=3))
+
+    editPanel.add(new JLabel("Python 2:"), Constraints(gridx = 0))
+    editPanel.add(python2TextField, Constraints(gridx = 1, weightx = 1.0, fill = GBC.HORIZONTAL))
+    editPanel.add(RichJButton("Browse...") {
+      askForPyPath("Python 2", python2TextField.getText).foreach(python2TextField.setText)
+    }, Constraints(gridx = 2))
+
+    editPanel.add(new JLabel("Python 3:"), Constraints(gridx = 0))
+    editPanel.add(python3TextField, Constraints(gridx = 1,weightx = 1.0, fill = GBC.HORIZONTAL))
+    editPanel.add(RichJButton("Browse...") {
       askForPyPath("Python 3", python3TextField.getText).foreach(python3TextField.setText)
-    }, Constraints(gridy = 1))
+    }, Constraints(gridx = 2))
 
     val okButton = RichJButton(I18N.gui.get("common.buttons.ok")) {
       save()
