@@ -9,6 +9,20 @@ Run `sbt package`.
 
 If compilation succeeds, `py.jar` will be created. This file and `pyext.py` should then be placed in a folder named `py` in your NetLogo `extensions` directory.
 
+## Configuring
+
+By default, the `py:python2`, `py:python3`, and `py:python` commands will attempt to find a Python executable of the appropriate version.
+If you'd like to change which Python executable they use, or they can't find a Python executable, you should configure which Python executables to use.
+You can do this by either:
+
+- Using the configuration menu under the Python toolbar menu that appears when you use a model that uses the Python extension.
+- Editing the `python.properties` file that appears in the Python extension installation folder as follows:
+
+```
+python3=/path/to/python3
+python2=/path/to/python2
+```
+
 ## Primitives
 
 
@@ -61,10 +75,10 @@ py:python
 ```
 
 
-Looks for and reports the path to the latest version of Python installed on the system. In general, it will look in your PATH.
-For Windows, there is an installation option for including Python on your PATH. For MacOS and Linux, it will likely
-already be on your PATH. The output of this reporter is meant to be used with `py:setup`, but you may also use it to see
-which Python installation this extension will use by default.
+Reports either the path to the latest version of Python configured in the `python.properties` file or, if that is blank, looks for a Python executable on your system's PATH.
+For Windows, there is an installation option for including Python on your PATH.
+For MacOS and Linux, it will likely already be on your PATH.
+The output of this reporter is meant to be used with `py:setup`, but you may also use it to see which Python installation this extension will use by default.
 
 For example, on MacOS with Homebrew installed Python 3:
 ```NetLogo
@@ -81,10 +95,10 @@ py:python2
 ```
 
 
-Looks for and reports the path to the latest version of Python 2 installed on the system. In general, it will look in your PATH.
-For Windows, there is an installation option for including Python on your PATH. For MacOS and Linux, it will likely
-already be on your PATH. The output of this reporter is meant to be used with `py:setup`, but you may also use it to see
-which Python 2 installation this extension will use by default.
+Reports either the path to Python 2 configured in the `python.properties` file or, if that is blank, looks for a Python 2 executable on your system's PATH.
+For Windows, there is an installation option for including Python on your PATH.
+For MacOS and Linux, it will likely already be on your PATH.
+The output of this reporter is meant to be used with `py:setup`, but you may also use it to see which Python 2 installation this extension will use by default.
 
 For example, on MacOS with Homebrew installed Python 2:
 ```NetLogo
@@ -101,10 +115,10 @@ py:python3
 ```
 
 
-Looks for and reports the latest version of Python 3 installed on the system. In general, it will look in your PATH.
-For Windows, there is an installation option for including Python on your PATH. For MacOS and Linux, it will likely
-already be on your PATH. The output of this reporter is meant to be used with `py:setup`, but you may also use it to see
-which Python 3 installation this extension will use by default.
+Reports either the path to Python 3 configured in the `python.properties` file or, if that is blank, looks for a Python 3 executable on your system's PATH.
+For Windows, there is an installation option for including Python on your PATH.
+For MacOS and Linux, it will likely already be on your PATH.
+The output of this reporter is meant to be used with `py:setup`, but you may also use it to see which Python 3 installation this extension will use by default.
 
 For example, on MacOS with Homebrew installed Python 3:
 ```NetLogo
@@ -146,7 +160,17 @@ py:runresult python-expression
 ```
 
 
-Evaluates the given Python expression and reports the result. `py:runresult` attempts to convert from Python data types to NetLogo data types. Numbers, strings, and booleans convert as you would expect. Any list-like object in Python (that is, anything with a length that you can iterate through) will be converted to a NetLogo list. For instance, Python lists and NumPy arrays will convert to NetLogo lists. Python dicts (and dict-like objects) will convert to a NetLogo list of key-value pairs (where each pair is represented as a list). `None` will be converted to `nobody`. Other objects will simply be converted to a string representation.
+Evaluates the given Python expression and reports the result.
+`py:runresult` attempts to convert from Python data types to NetLogo data types.
+Numbers, strings, and booleans convert as you would expect.
+Any list-like object in Python (that is, anything with a length that you can iterate through) will be converted to a NetLogo list.
+For instance, Python lists and NumPy arrays will convert to NetLogo lists.
+Python dicts (and dict-like objects) will convert to a NetLogo list of key-value pairs (where each pair is represented as a list).
+`None` will be converted to `nobody`.
+Other objects will simply be converted to a string representation.
+
+Note that due a [current issue](https://github.com/qiemem/PythonExtension/issues/6), dict keys will always be reported as strings.
+If you need to report non-string keys, report the `.items()` of the dict instead of the dict itself.
 
 
 
@@ -157,7 +181,7 @@ py:set variable-name value
 ```
 
 
-Sets a variable in the Python session with the given name to the given NetLogo value. NetLogo objects will be converted to Python objects as expected. `value` should only be a number, string, boolean, list, or nobody (agents and the like are currently converted to strings).
+Sets a variable in the Python session with the given name to the given NetLogo value. NetLogo objects will be converted to Python objects as expected. `value` should only be a number, string, boolean, list, or nobody (agents and extension objects are currently converted to strings).
 
 ```NetLogo
 py:set "x" [1 2 3]
