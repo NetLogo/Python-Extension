@@ -26,7 +26,6 @@ scalaVersion := "2.12.2"
 scalaSource in Compile := baseDirectory.value / "src"
 
 libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"
-libraryDependencies += "com.miglayout" % "miglayout-swing" % "5.0"
 
 netLogoPackageExtras += (baseDirectory(_ / "pyext.py").value, "pyext.py")
 netLogoPackageExtras += (baseDirectory(_ / "tests.txt").value, "tests.txt")

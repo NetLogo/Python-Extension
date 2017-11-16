@@ -8,14 +8,12 @@ import java.net.{ServerSocket, Socket}
 import java.util.Properties
 
 import com.fasterxml.jackson.core.JsonParser
-import jdk.nashorn.internal.parser.JSONParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
 import org.json4s.jackson.JsonMethods.{mapper, parse}
 import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
-import org.nlogo.nvm.ExtensionContext
 import org.nlogo.workspace.AbstractWorkspace
 
 import scala.collection.JavaConverters._
