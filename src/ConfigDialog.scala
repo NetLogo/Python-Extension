@@ -64,8 +64,8 @@ class ConfigEditor(owner: JFrame, config: PythonConfig) extends JDialog(owner, "
   }
 
   def save(): Unit = {
-    if (python2TextField.getText.nonEmpty) config.python2 = python2TextField.getText
-    if (python3TextField.getText.nonEmpty) config.python3 = python3TextField.getText
+    config.python2 = python2TextField.getText
+    config.python3 = python3TextField.getText
   }
 }
 
