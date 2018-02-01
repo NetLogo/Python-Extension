@@ -25,6 +25,8 @@ scalaVersion := "2.12.2"
 
 scalaSource in Compile := baseDirectory.value / "src"
 
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings")
+
 libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"
 
 netLogoPackageExtras += (baseDirectory(_ / "pyext.py").value, "pyext.py")

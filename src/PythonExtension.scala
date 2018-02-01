@@ -6,6 +6,8 @@ import java.lang.ProcessBuilder.Redirect
 import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
@@ -14,9 +16,13 @@ import org.nlogo.api
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
+import org.nlogo.nvm.{ExtensionContext, HaltException}
 import org.nlogo.workspace.AbstractWorkspace
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.concurrent.SyncVar
+import scala.util.{Failure, Success, Try}
 
 object PythonExtension {
   private var _pythonProcess: Option[PythonSubprocess] = None
@@ -36,6 +42,11 @@ object PythonExtension {
     _pythonProcess =  Some(proc)
   }
 
+  def killPython(): Unit = {
+    _pythonProcess.foreach(_.close())
+    _pythonProcess = None
+  }
+
   def isHeadless: Boolean = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
 
   def pythonNotFound = throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the configuration menu.")
@@ -44,6 +55,22 @@ object PythonExtension {
     case x if x.isInfinite => throw new ExtensionException("Python reported a number too large for NetLogo.")
     case x if x.isNaN => throw new ExtensionException("Python reported a non-numeric value from a mathematical operation.")
     case x => x
+  }
+
+  def waitFor[R](ctx: ExtensionContext)(result: SyncVar[R]): R =  {
+    @tailrec
+    def helper(): R = result.get(10) match {
+      case Some(x) => x
+      case None =>
+        ctx.workspace.breathe(ctx.nvmContext)
+        helper()
+    }
+    try helper()
+    catch {
+      case _: InterruptedException | _: HaltException =>
+        killPython()
+        throw new HaltException(true)
+    }
   }
 }
 
@@ -226,11 +253,15 @@ object PythonSubprocess {
 }
 
 class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
+  private val shuttingDown = new AtomicBoolean(false)
+
   val in = new BufferedInputStream(socket.getInputStream)
   val out = new BufferedOutputStream(socket.getOutputStream)
 
   val stdout = new InputStreamReader(proc.getInputStream)
   val stderr = new InputStreamReader(proc.getErrorStream)
+
+  private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
   def output(s: String): Unit = {
     if (GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true")
@@ -238,6 +269,7 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     else
       ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
   }
+
   def redirectPipes(): Unit = {
     val stdoutContents = PythonSubprocess.readAllReady(stdout)
     val stderrContents = PythonSubprocess.readAllReady(stderr)
@@ -247,23 +279,42 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
       output(s"Python error output:\n$stderrContents")
   }
 
-  def exec(stmt: String): Unit = {
+  private def async[R](body: => Try[R]): SyncVar[Try[R]] = {
+    val result = new SyncVar[Try[R]]
+    executor.execute { () =>
+      try result.put(body)
+      catch {
+        case _: IOException if shuttingDown.get =>
+        case e: IOException =>
+          result.put(Failure(
+            new ExtensionException("Disconnected from Python unexpectedly. Try running py:setup again.", e)
+          ))
+        case _: InterruptedException =>
+        case e: Exception => result.put(Failure(e))
+      }
+    }
+    result
+  }
+
+  def exec(stmt: String): SyncVar[Try[Unit]] = async {
     sendStmt(stmt)
     val t = readByte()
     redirectPipes()
-    if (t != 0) {
-      throw pythonException()
+    if (t == 0) {
+      Success(())
+    } else {
+      Failure(pythonException())
     }
   }
 
-  def eval(expr: String): AnyRef = {
+  def eval(expr: String): SyncVar[Try[AnyRef]] = async {
     sendExpr(expr)
     val t = readByte()
     redirectPipes()
     if (t == 0) {
-      readLogo()
+      Success(readLogo())
     } else {
-      throw pythonException()
+      Failure(pythonException())
     }
   }
 
@@ -306,16 +357,16 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   private def readByte(): Byte = {
     val nextByte = in.read()
     if (nextByte == -1) {
-      throw new ExtensionException("Python process quit unexpectedly")
+      throw new IOException("Reached end of stream.")
     }
     nextByte.toByte
   }
 
   private def readInt(): Int = {
     (readByte() << 24) & 0xff000000 |
-      (readByte() << 16) & 0x00ff0000 |
-      (readByte() << 8) & 0x0000ff00 |
-      (readByte() << 0) & 0x000000ff
+    (readByte() << 16) & 0x00ff0000 |
+    (readByte() <<  8) & 0x0000ff00 |
+    (readByte() <<  0) & 0x000000ff
   }
 
   private def readString(): String = {
@@ -360,11 +411,15 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   }
 
   def close(): Unit = {
+    shuttingDown.set(true)
+    executor.shutdownNow()
     in.close()
     out.close()
     socket.close()
-    proc.destroy()
-    proc.waitFor()
+    proc.destroyForcibly()
+    proc.waitFor(3, TimeUnit.SECONDS)
+    if (proc.isAlive)
+      throw new ExtensionException("Python process failed to shutdown. Please shut it down via your process manager")
   }
 }
 
@@ -406,7 +461,7 @@ class PythonExtension extends api.DefaultClassManager {
   }
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
-    PythonExtension._pythonProcess.foreach(_.close())
+    PythonExtension.killPython()
   }
 }
 
@@ -427,8 +482,29 @@ object Run extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
+    PythonExtension.waitFor(context.asInstanceOf[ExtensionContext]) {
+      PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
+    } match {
+      case Failure(e) => throw e
+      case _ =>
+    }
 }
+
+object RunResult extends api.Reporter {
+  override def getSyntax: Syntax = Syntax.reporterSyntax(
+    right = List(Syntax.StringType | Syntax.RepeatableType),
+    ret = Syntax.WildcardType
+  )
+
+  override def report(args: Array[Argument], context: Context): AnyRef =
+    PythonExtension.waitFor(context.asInstanceOf[ExtensionContext]) {
+      PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n"))
+    } match {
+      case Failure(e) => throw e
+      case Success(x) => x
+    }
+}
+
 
 case class FindPython(
   pyFinder: () => Option[File],
@@ -453,16 +529,6 @@ object Path extends api.Reporter {
     LogoList.fromVector(PythonSubprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-}
-
-object RunResult extends api.Reporter {
-  override def getSyntax: Syntax = Syntax.reporterSyntax(
-    right = List(Syntax.StringType | Syntax.RepeatableType),
-    ret = Syntax.WildcardType
-  )
-
-  override def report(args: Array[Argument], context: Context): AnyRef =
-    PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n"))
 }
 
 object Set extends api.Command {
