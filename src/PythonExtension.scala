@@ -7,19 +7,20 @@ import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit, TimeoutException}
+import javax.swing.SwingUtilities
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
 import org.json4s.jackson.JsonMethods.{mapper, parse}
 import org.nlogo.api
+import org.nlogo.api.Exceptions.ignoring
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
 import org.nlogo.nvm.{ExtensionContext, HaltException}
 import org.nlogo.workspace.AbstractWorkspace
 
-import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
@@ -58,17 +59,12 @@ object PythonExtension {
   }
 
   def waitFor[R](ctx: ExtensionContext)(result: SyncVar[R]): R =  {
-    @tailrec
-    def helper(): R = result.get(10) match {
-      case Some(x) => x
-      case None =>
-        ctx.workspace.breathe(ctx.nvmContext)
-        helper()
-    }
-    try helper()
+    // This can easily be extended if we need to do something while we're waiting for results using
+    // `result.get(timeout)`
+    try result.get
     catch {
       case _: InterruptedException | _: HaltException =>
-        killPython()
+        ignoring(classOf[InterruptedException])(killPython())
         throw new HaltException(true)
     }
   }
@@ -267,7 +263,10 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     if (GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true")
       println(s)
     else
-      ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
+      SwingUtilities.invokeLater { () =>
+        // outputObject blocks, and we don't want to block.
+        ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
+      }
   }
 
   def redirectPipes(): Unit = {
@@ -282,10 +281,15 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   private def async[R](body: => Try[R]): SyncVar[Try[R]] = {
     val result = new SyncVar[Try[R]]
     executor.execute { () =>
-      try result.put(body)
-      catch {
+      try {
+        val res = body
+        // if operation completes normally, want to set busy false before setting result in case another async request
+        // is made immediately.
+        result.put(res)
+      } catch {
         case _: IOException if shuttingDown.get =>
         case e: IOException =>
+          close()
           result.put(Failure(
             new ExtensionException("Disconnected from Python unexpectedly. Try running py:setup again.", e)
           ))
@@ -296,36 +300,23 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     result
   }
 
-  def exec(stmt: String): SyncVar[Try[Unit]] = async {
-    sendStmt(stmt)
+  private def run[R](send: => Unit)(read: => R): Try[R] = {
+    send
     val t = readByte()
-    redirectPipes()
-    if (t == 0) {
-      Success(())
+    val result = if (t == 0) {
+      Success(read)
     } else {
       Failure(pythonException())
     }
+    redirectPipes()
+    result
   }
 
-  def eval(expr: String): SyncVar[Try[AnyRef]] = async {
-    sendExpr(expr)
-    val t = readByte()
-    redirectPipes()
-    if (t == 0) {
-      Success(readLogo())
-    } else {
-      Failure(pythonException())
-    }
-  }
+  def exec(stmt: String): SyncVar[Try[Unit]] = async { run { sendStmt(stmt) } {()} }
 
-  def assign(varName: String, value: AnyRef): Unit = {
-    sendAssn(varName, value)
-    val t = readByte()
-    redirectPipes()
-    if (t != 0) {
-      throw pythonException()
-    }
-  }
+  def eval(expr: String): SyncVar[Try[AnyRef]] = async { run {sendExpr(expr)} {readLogo()} }
+
+  def assign(varName: String, value: AnyRef): SyncVar[Try[Unit]] = async { run { sendAssn(varName, value) } {()} }
 
   def pythonException(): Exception ={
     val e = readString()
@@ -413,9 +404,9 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
   def close(): Unit = {
     shuttingDown.set(true)
     executor.shutdownNow()
-    in.close()
-    out.close()
-    socket.close()
+    ignoring(classOf[IOException])(in.close())
+    ignoring(classOf[IOException])(out.close())
+    ignoring(classOf[IOException])(socket.close())
     proc.destroyForcibly()
     proc.waitFor(3, TimeUnit.SECONDS)
     if (proc.isAlive)
@@ -505,6 +496,12 @@ object RunResult extends api.Reporter {
     }
 }
 
+object Set extends api.Command {
+  override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
+  override def perform(args: Array[Argument], context: Context): Unit =
+    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
+}
+
 
 case class FindPython(
   pyFinder: () => Option[File],
@@ -529,10 +526,4 @@ object Path extends api.Reporter {
     LogoList.fromVector(PythonSubprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-}
-
-object Set extends api.Command {
-  override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
-  override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
 }

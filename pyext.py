@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import sys
 import os
 import socket
 import sys
@@ -22,11 +21,13 @@ ASSN_MSG = 2
 # Out
 
 SUCC_MSG = 0
-ERR_MSG  = 1
+ERR_MSG = 1
+
 
 def print_err(s):
     sys.stderr.write('{}\n'.format(s))
     sys.stderr.flush()
+
 
 class ConnectionReader(object):
     def __init__(self, conn):
@@ -56,9 +57,8 @@ class ConnectionReader(object):
         return struct.unpack('b', self.read(1))[0]
 
     def read_string(self):
-        l = self.read_int()
-        s = self.read(l).decode('utf-8')
-        return s
+        length = self.read_int()
+        return self.read(length).decode('utf-8')
 
 
 class ConnectionWriter(object):
@@ -87,17 +87,20 @@ class ConnectionWriter(object):
     def clear(self):
         self.buff = bytearray()
 
+
 def utf8(bs):
-    if sys.version_info >= (3,0):
+    if sys.version_info >= (3, 0):
         return str(bs, 'UTF8')
     else:
         return unicode(bs, 'UTF8')
 
+
 def to_bytes(s):
-    if sys.version_info >= (3,0):
+    if sys.version_info >= (3, 0):
         return bytes(s, 'UTF8')
     else:
         return bytes(s)
+
 
 class FlexibleEncoder(json.JSONEncoder):
     def default(self, o):
@@ -110,7 +113,7 @@ class FlexibleEncoder(json.JSONEncoder):
         elif hasattr(o, '__len__') and hasattr(o, '__iter__'):
             return list(o)
         else:
-            return json.JSONEncoder.default(self, o) # let it error
+            return json.JSONEncoder.default(self, o)  # let it error
 
 
 def logo_responder(port):
@@ -119,7 +122,6 @@ def logo_responder(port):
         sock.bind(('localhost', port))
         sock.listen(0)
         conn, addr = sock.accept()
-        buff = bytes()
         try:
             inp = ConnectionReader(conn)
             out = ConnectionWriter(conn)
@@ -156,16 +158,12 @@ def logo_responder(port):
     finally:
         sock.close()
 
+
 def flush():
     sys.stdout.flush()
     sys.stderr.flush()
-
-def conn_iter(conn):
-    buff = bytes()
 
 
 if __name__ == '__main__':
     sys.path.insert(0, os.getcwd())
     logo_responder(int(sys.argv[-1]))
-
-
