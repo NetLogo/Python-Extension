@@ -7,7 +7,7 @@ import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
 import java.net.{ServerSocket, Socket}
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.swing.SwingUtilities
 
 import com.fasterxml.jackson.core.JsonParser
@@ -18,11 +18,12 @@ import org.nlogo.api.Exceptions.ignoring
 import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
-import org.nlogo.nvm.{ExtensionContext, HaltException}
+import org.nlogo.nvm.HaltException
 import org.nlogo.workspace.AbstractWorkspace
 
 import scala.collection.JavaConverters._
 import scala.concurrent.SyncVar
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 object PythonExtension {
@@ -58,17 +59,36 @@ object PythonExtension {
     case x => x
   }
 
-  def waitFor[R](ctx: ExtensionContext)(result: SyncVar[R]): R =  {
-    // This can easily be extended if we need to do something while we're waiting for results using
-    // `result.get(timeout)`
-    try result.get
-    catch {
-      case _: InterruptedException | _: HaltException =>
-        ignoring(classOf[InterruptedException])(killPython())
-        throw new HaltException(true)
-    }
+}
+
+object Haltable {
+  def apply[R](body: => R): R = try body catch {
+    case _: InterruptedException =>
+      Thread.interrupted()
+      PythonExtension.pythonProcess.invalidateJobs()
+      throw new HaltException(true)
+    case e: Throwable => throw e
   }
 }
+
+object Handle {
+  /**
+    * Deal with Exceptions (both inside the Try and non-fatal thrown) in a NetLogo-friendly way.
+    */
+  def apply[R](body: => Try[R]): R = Try(body).flatten match {
+    case Failure(he: HaltException) => throw he// We can't actually catch throw InterruptedExceptions, but in case there's a wrapped one
+    case Failure(ie: InterruptedException) =>
+      Thread.interrupted()
+      PythonExtension.pythonProcess.invalidateJobs()
+      throw new HaltException(true)
+    case Failure(ee: ExtensionException) => throw ee
+    case Failure(ex: Exception) => throw new ExtensionException(ex)
+    case Failure(th: Throwable) => throw th
+    case Success(x) => x
+  }
+
+}
+
 
 object Using {
   def apply[A <: Closeable, B](resource: A)(fn: A => B): B =
@@ -249,7 +269,11 @@ object PythonSubprocess {
 }
 
 class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
+  // Signals to the executor thread that we're shutting down, so IOException's are to be expected.
   private val shuttingDown = new AtomicBoolean(false)
+  // Used to distinguish if Python is not responding because it's busy doing something that we want it to do or if it's
+  // busy doing something else.
+  private val isRunningLegitJob = new AtomicBoolean(false)
 
   val in = new BufferedInputStream(socket.getInputStream)
   val out = new BufferedOutputStream(socket.getOutputStream)
@@ -278,14 +302,15 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
       output(s"Python error output:\n$stderrContents")
   }
 
+  /**
+    * Runs the given code by submitting to a STE. Wraps all errors in Try.
+    */
   private def async[R](body: => Try[R]): SyncVar[Try[R]] = {
     val result = new SyncVar[Try[R]]
     executor.execute { () =>
       try {
-        val res = body
-        // if operation completes normally, want to set busy false before setting result in case another async request
-        // is made immediately.
-        result.put(res)
+        isRunningLegitJob.set(true)
+        result.put(body)
       } catch {
         case _: IOException if shuttingDown.get =>
         case e: IOException =>
@@ -293,13 +318,21 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
           result.put(Failure(
             new ExtensionException("Disconnected from Python unexpectedly. Try running py:setup again.", e)
           ))
-        case _: InterruptedException =>
+        case _: InterruptedException => Thread.interrupted()
         case e: Exception => result.put(Failure(e))
+      } finally {
+        isRunningLegitJob.set(false)
       }
     }
     result
   }
 
+  /**
+    * Uses the give send code to send to data python and the read code to read from Python. Handles response types and
+    * pipe redirection.
+    *
+    * Python errors will be wrapped in Try, but IOExceptions will not.
+    */
   private def run[R](send: => Unit)(read: => R): Try[R] = {
     send
     val t = readByte()
@@ -312,11 +345,42 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     result
   }
 
-  def exec(stmt: String): SyncVar[Try[Unit]] = async { run { sendStmt(stmt) } {()} }
+  /**
+    * Checks to see if the Python process is responding. There are two reasons it may not be responding:
+    * 1. Python is running a legit job that we are expecting the result of. This can only happen if we didn't block on
+    * Python's response. In this case, we're okay with it not responding, so return Success
+    * 2. A halt was called while Python was doing something long-running. It's still doing that thing, which might be
+    * bad, so we fail in this case.
+    *
+    * The two cases are distinguished using `isRunningLegitJob`
+    */
+  def heartbeat(timeout: Duration = 1.seconds): Try[Unit] = if (!isRunningLegitJob.get) {
+    val hb = async {
+      // Technically this isn't necessary, since our STE should always be waiting on Python if it's doing something.
+      // However, it's probably a good idea in case something goes wrong with the Python process or an STE job bugs out.
+      run { sendStmt("") } {()}
+    }
+    hb.get(timeout.toMillis).getOrElse(
+      Failure(new ExtensionException(
+        "Python process is not responding. You can wait to see if it finishes what it's doing or restart it using py:setup."
+      ))
+    )
+  } else Success(())
 
-  def eval(expr: String): SyncVar[Try[AnyRef]] = async { run {sendExpr(expr)} {readLogo()} }
+  def exec(stmt: String): Try[SyncVar[Try[Unit]]] =
+    heartbeat().map(_ => async {
+      run(sendStmt(stmt))(())
+    })
 
-  def assign(varName: String, value: AnyRef): SyncVar[Try[Unit]] = async { run { sendAssn(varName, value) } {()} }
+  def eval(expr: String): Try[SyncVar[Try[AnyRef]]] =
+    heartbeat().map(_ => async {
+      run(sendExpr(expr))(readLogo())
+    })
+
+  def assign(varName: String, value: AnyRef): Try[SyncVar[Try[Unit]]] =
+    heartbeat().map(_ => async {
+      run(sendAssn(varName, value))(())
+    })
 
   def pythonException(): Exception ={
     val e = readString()
@@ -412,6 +476,11 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
     if (proc.isAlive)
       throw new ExtensionException("Python process failed to shutdown. Please shut it down via your process manager")
   }
+
+  /**
+    * CALL THIS ON HALT!
+    */
+  def invalidateJobs(): Unit = isRunningLegitJob.set(false)
 }
 
 class PythonExtension extends api.DefaultClassManager {
@@ -473,12 +542,9 @@ object Run extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.waitFor(context.asInstanceOf[ExtensionContext]) {
-      PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
-    } match {
-      case Failure(e) => throw e
-      case _ =>
-    }
+    Handle { Haltable {
+      PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n")).flatMap(_.get)
+    } }
 }
 
 object RunResult extends api.Reporter {
@@ -488,18 +554,17 @@ object RunResult extends api.Reporter {
   )
 
   override def report(args: Array[Argument], context: Context): AnyRef =
-    PythonExtension.waitFor(context.asInstanceOf[ExtensionContext]) {
-      PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n"))
-    } match {
-      case Failure(e) => throw e
-      case Success(x) => x
-    }
+    Handle { Haltable {
+      PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n")).flatMap(_.get)
+    } }
 }
 
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
+    Handle { Haltable {
+      PythonExtension.pythonProcess.assign(args(0).getString, args(1).get).flatMap(_.get)
+    } }
 }
 
 
