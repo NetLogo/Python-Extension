@@ -45,9 +45,6 @@ observer> py:run "print(min(patch_xs))"
 See the documentation for each of the particular primitives for details on, for instance, how to multi-line statements and how object type conversions work.
 See the demo models included in the `demo` folder for some examples of using libraries such as `numpy` and `tensorflow`.
 
-One caveat: halting NetLogo (Tools > Halt) while the Python is running something will kill the Python process.
-You will have to rerun `py:setup`.
-
 ### Error handling
 
 Python errors will be reported in NetLogo as "Extension exceptions". For instance, this code:
