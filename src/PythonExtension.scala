@@ -1,5 +1,6 @@
 package org.nlogo.py
 
+
 import java.awt.GraphicsEnvironment
 import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, Closeable, File, FileInputStream, FileOutputStream, IOException, InputStreamReader}
 import java.lang.ProcessBuilder.Redirect
@@ -8,7 +9,7 @@ import java.net.{ServerSocket, Socket}
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import javax.swing.SwingUtilities
+import javax.swing.{JMenu, SwingUtilities}
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
@@ -484,6 +485,8 @@ class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
 }
 
 class PythonExtension extends api.DefaultClassManager {
+  var pyMenu: Option[JMenu] = None
+
   override def load(manager: api.PrimitiveManager): Unit = {
     manager.addPrimitive("setup", SetupPython)
     manager.addPrimitive("run", Run)
@@ -514,14 +517,18 @@ class PythonExtension extends api.DefaultClassManager {
 
     if (!PythonExtension.isHeadless) {
       val menuBar = App.app.frame.getJMenuBar
-      menuBar.getComponents.find(_.getName == PythonMenu.name).getOrElse {
-        menuBar.add(new PythonMenu)
+
+      menuBar.getComponents.collectFirst {
+        case mi: JMenu if mi.getText == PythonMenu.name => mi
+      }.getOrElse {
+        pyMenu = Option(menuBar.add(new PythonMenu))
       }
     }
   }
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
+    pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
   }
 }
 
