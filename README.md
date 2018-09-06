@@ -1,3 +1,4 @@
+https://github.com/NetLogo/ControlFlowExtension is now the canonical version of this repository.
 
 # NetLogo Python extension
 
