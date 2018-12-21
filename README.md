@@ -1,4 +1,4 @@
-https://github.com/NetLogo/PythonExtension is now the canonical version of this repository.
+https://github.com/NetLogo/Python-Extension is now the canonical version of this repository.
 
 # NetLogo Python extension
 
