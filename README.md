@@ -194,7 +194,7 @@ Runs the given Python statements in the current Python session. To make multi-li
   "import numpy as np"
   "import matplotlib.pyplot as plt"
   "for i in range(10):"
-  "    plt.plot([ x ** i for x in arange(-1, 1, 0.1) ])"
+  "    plt.plot([ x ** i for x in np.arange(-1, 1, 0.1) ])"
   "plt.show()"
 )
 ```
