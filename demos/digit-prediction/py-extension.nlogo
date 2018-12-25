@@ -25,7 +25,13 @@ to draw
   [
     ask patch mouse-xcor mouse-ycor
     [
-      set pcolor white
+      ifelse rubber
+      [
+        set pcolor black
+      ]
+      [
+        set pcolor white
+      ]
     ]
   ]
   tick
@@ -164,6 +170,17 @@ NIL
 NIL
 NIL
 1
+
+SWITCH
+203
+69
+306
+102
+rubber
+rubber
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
