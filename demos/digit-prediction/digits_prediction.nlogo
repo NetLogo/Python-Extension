@@ -1,27 +1,25 @@
 extensions [ py ]
 
-globals [ path ]
+globals [ path coords_x coords_y color_list digit]
 
 to setup-py
+  clear-all
   py:setup py:python
   (py:run
     "import numpy as np"
     "from keras.models import load_model"
-    "from PIL import Image"
   )
   ;; load model
   py:run "model = load_model(\"model.h5\")"
-  setup
-end
 
-to setup
-  clear-all
-  reset-ticks
-  set path "img.png"
+  ;; create coords list, useful to make color_list
+  set coords_x (range max-pxcor)
+  set coords_y (range max-pycor)
+  set color_list []
 end
 
 to draw
-  if mouse-down?
+  ifelse mouse-down?
   [
     ask patch mouse-xcor mouse-ycor
     [
@@ -34,39 +32,36 @@ to draw
       ]
     ]
   ]
-  tick
+  [
+    predict
+  ]
+  display
 end
 
 to predict
-  save-view
-  load-view
-  py:run "y_pred = model.predict(image)"
-  py:run "print(y_pred)"
-  (py:run
-    "for pos, item in enumerate(y_pred[0]):"
-    "    if item == 1:"
-    "        result = pos"
-  )
-  output-print py:runresult "result"
-end
-
-to load-view
-  py:set "path" path
-  py:run "print(path)"
-  (py:run
-    "image = Image.open(path).convert(\"L\")"
-    "image = image.resize((28, 28))"
-    "image = np.array(image)"
-    "image = image.reshape(1, 28, 28, 1)"
-  )
-end
-
-to save-view
-  export-view path
+  set color_list []
+  foreach coords_x
+  [
+    x -> foreach coords_y
+    [
+      y ->
+        let c [ pcolor / 10 ] of patch x y
+        set color_list lput c color_list
+    ]
+  ]
+  py:set "images" color_list
+  py:run "array = np.array(images).reshape(28, 28)"
+  py:run "array = array.reshape(1, 28, 28, 1)"
+  py:run "y_pred = model.predict(array)[0]"
+  py:run "result = np.argmax(y_pred)"
+  set digit py:runresult "result"
 end
 
 to clear
-  setup
+  ask patches
+  [
+    set pcolor black
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -90,14 +85,14 @@ GRAPHICS-WINDOW
 28
 0
 28
-1
-1
+0
+0
 1
 ticks
 30.0
 
 BUTTON
-35
+38
 27
 182
 60
@@ -131,30 +126,6 @@ NIL
 1
 
 BUTTON
-40
-118
-176
-151
-NIL
-predict
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-OUTPUT
-36
-169
-183
-223
-17
-
-BUTTON
 117
 68
 180
@@ -172,52 +143,63 @@ NIL
 1
 
 SWITCH
-203
-69
-306
-102
+39
+115
+142
+148
 rubber
 rubber
 1
 1
 -1000
 
+MONITOR
+193
+28
+309
+85
+Prediction digit
+digit
+2
+1
+14
+
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+The model predict digits written on the patch. The model was pretrained on MNIST dataset using convolutional neural network (CNN) based on [Kaggle implementation](https://www.kaggle.com/yassineghouzam/introduction-to-cnn-keras-0-997-top-6). It can recognised digits from 0 to 9 (multilabel classification).
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The input to neural network is array created from the colors of the patch. Next the neural network compute its weights and return the number from 0 to 9.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+1. Click _setup-py_ to import all necessary libraries and load model (it can take a while)
+2. Click _draw_ to start drawing on the board
+3. While the mouse is not pressed, on the monitor widget it should be displayed predicted digit
+4. Click _clear_ button to set all patches to black (reset)
+5. Turn on _rubber_ to set pen to black color
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+The model is not 100% accurate.
 
-## THINGS TO TRY
-
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+Notice the need for the `Python` packages:
+- **keras** (also **tensorflow** as a backend)
+- **numpy**
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+Create new model in `Python` e.g for letters recognition.
 
 ## NETLOGO FEATURES
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+Usage of `foreach` in `foreach` loop to create _pcolor_ list (_predict_ function).
 
-## RELATED MODELS
+## COPYRIGHT
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
-
-## CREDITS AND REFERENCES
-
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+Copyright 2018 Robert Jankowski.
 @#$#@#$#@
 default
 true
