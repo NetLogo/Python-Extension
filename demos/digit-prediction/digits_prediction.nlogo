@@ -1,6 +1,9 @@
 extensions [ py ]
 
-globals [ path coords_x coords_y color_list digit]
+globals [
+  coords-x coords-y color-list digit
+  zero one two three four five six seven eight nine
+]
 
 to setup-py
   clear-all
@@ -13,9 +16,9 @@ to setup-py
   py:run "model = load_model(\"model.h5\")"
 
   ;; create coords list, useful to make color_list
-  set coords_x (range max-pxcor)
-  set coords_y (range max-pycor)
-  set color_list []
+  set coords-x (range max-pxcor (min-pxcor - 1) -1)
+  set coords-y (range max-pycor (min-pycor - 1) -1)
+  set color-list []
 end
 
 to draw
@@ -23,7 +26,7 @@ to draw
   [
     ask patch mouse-xcor mouse-ycor
     [
-      ifelse rubber
+      ifelse erase?
       [
         set pcolor black
       ]
@@ -39,52 +42,59 @@ to draw
 end
 
 to predict
-  set color_list []
-  foreach coords_x
+  set color-list []
+  foreach coords-x
   [
-    x -> foreach coords_y
+    x -> foreach coords-y
     [
       y ->
         let c [ pcolor / 10 ] of patch x y
-        set color_list lput c color_list
+        set color-list lput c color-list
     ]
   ]
-  py:set "images" color_list
-  py:run "array = np.array(images).reshape(28, 28)"
-  py:run "array = array.reshape(1, 28, 28, 1)"
+  py:set "images" color-list
+  py:run "array = np.array(images).reshape(1, 28, 28, 1)"
   py:run "y_pred = model.predict(array)[0]"
-  py:run "result = np.argmax(y_pred)"
-  set digit py:runresult "result"
+  set digit py:runresult "np.argmax(y_pred)"
+
+  ;; return probabilities per digit (softmax layer) in %
+  set zero   py:runresult "y_pred[0] * 100"
+  set one    py:runresult "y_pred[1] * 100"
+  set two    py:runresult "y_pred[2] * 100"
+  set three  py:runresult "y_pred[3] * 100"
+  set four   py:runresult "y_pred[4] * 100"
+  set five   py:runresult "y_pred[5] * 100"
+  set six    py:runresult "y_pred[6] * 100"
+  set seven  py:runresult "y_pred[7] * 100"
+  set eight  py:runresult "y_pred[8] * 100"
+  set nine   py:runresult "y_pred[9] * 100"
 end
 
 to clear
-  ask patches
-  [
-    set pcolor black
-  ]
+  clear-patches
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-316
-20
-701
-406
+318
+27
+682
+392
 -1
 -1
-13.0
+12.72414
 1
 10
 1
 1
 1
 0
-1
-1
+0
+0
 1
 0
-28
+27
 0
-28
+27
 0
 0
 1
@@ -92,10 +102,10 @@ ticks
 30.0
 
 BUTTON
-38
-27
-182
-60
+11
+30
+155
+63
 NIL
 setup-py
 NIL
@@ -109,10 +119,10 @@ NIL
 1
 
 BUTTON
-40
-68
-103
-101
+13
+71
+76
+104
 NIL
 draw
 T
@@ -126,10 +136,10 @@ NIL
 1
 
 BUTTON
-117
-68
-180
-101
+90
+71
+153
+104
 NIL
 clear
 NIL
@@ -143,26 +153,136 @@ NIL
 1
 
 SWITCH
-39
+12
+118
 115
-142
-148
-rubber
-rubber
+151
+erase?
+erase?
 1
 1
 -1000
 
 MONITOR
-193
-28
-309
-85
+168
+33
+284
+90
 Prediction digit
 digit
 2
 1
 14
+
+MONITOR
+21
+171
+129
+224
+Prob. of 0 [%]
+zero
+5
+1
+13
+
+MONITOR
+138
+171
+246
+224
+Prob. of 1 [%]
+one
+5
+1
+13
+
+MONITOR
+20
+230
+128
+283
+Prob. of 2 [%]
+two
+5
+1
+13
+
+MONITOR
+138
+232
+246
+285
+Prob. of 3 [%]
+three
+5
+1
+13
+
+MONITOR
+19
+290
+127
+343
+Prob. of 4 [%]
+four
+5
+1
+13
+
+MONITOR
+138
+291
+246
+344
+Prob. of 5 [%]
+five
+5
+1
+13
+
+MONITOR
+19
+349
+127
+402
+Prob. of 6 [%]
+six
+5
+1
+13
+
+MONITOR
+139
+349
+247
+402
+Prob. of 7 [%]
+seven
+5
+1
+13
+
+MONITOR
+19
+410
+127
+463
+Prob. of 8 [%]
+eight
+5
+1
+13
+
+MONITOR
+139
+411
+247
+464
+Prob. of 9 [%]
+nine
+5
+1
+13
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -178,12 +298,13 @@ The input to neural network is array created from the colors of the patch. Next 
 1. Click _setup-py_ to import all necessary libraries and load model (it can take a while)
 2. Click _draw_ to start drawing on the board
 3. While the mouse is not pressed, on the monitor widget it should be displayed predicted digit
-4. Click _clear_ button to set all patches to black (reset)
-5. Turn on _rubber_ to set pen to black color
+4. On multiple monitors are showing probabilities from softmax neural network layer
+5. Click _clear_ button to set all patches to black (reset)
+6. Turn on _erase?_ to set pen to black color
 
 ## THINGS TO NOTICE
 
-The model is not 100% accurate.
+The model is not 100% accurate and sometimes show ridiculous result.
 
 Notice the need for the `Python` packages:
 - **keras** (also **tensorflow** as a backend)
