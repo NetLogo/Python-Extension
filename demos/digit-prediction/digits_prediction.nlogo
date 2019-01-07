@@ -1,9 +1,6 @@
 extensions [ py ]
 
-globals [
-  coords-x coords-y color-list digit
-  zero one two three four five six seven eight nine
-]
+globals [ coords-x coords-y digit probabilities ]
 
 to setup-py
   clear-all
@@ -15,17 +12,18 @@ to setup-py
   ;; load model
   py:run "model = load_model(\"model.h5\")"
 
-  ;; create coords list, useful to make color_list
-  set coords-x (range max-pxcor (min-pxcor - 1) -1)
+  set coords-x (range min-pxcor (max-pxcor + 1))
   set coords-y (range max-pycor (min-pycor - 1) -1)
-  set color-list []
+
+  set probabilities n-values 10 [ 0 ]
 end
 
 to draw
-  ifelse mouse-down?
+  if mouse-down?
   [
     ask patch mouse-xcor mouse-ycor
     [
+      predict
       ifelse erase?
       [
         set pcolor black
@@ -35,53 +33,36 @@ to draw
       ]
     ]
   ]
-  [
-    predict
-  ]
   display
 end
 
 to predict
-  set color-list []
-  foreach coords-x
-  [
-    x -> foreach coords-y
-    [
-      y ->
-        let c [ pcolor / 10 ] of patch x y
-        set color-list lput c color-list
-    ]
-  ]
-  py:set "images" color-list
+  py:set "images" map [ y ->
+    map [ x ->
+      [ pcolor / 10 ] of patch x y
+    ] coords-x
+  ] coords-y
   py:run "array = np.array(images).reshape(1, 28, 28, 1)"
   py:run "y_pred = model.predict(array)[0]"
   set digit py:runresult "np.argmax(y_pred)"
 
-  ;; return probabilities per digit (softmax layer) in %
-  set zero   py:runresult "y_pred[0] * 100"
-  set one    py:runresult "y_pred[1] * 100"
-  set two    py:runresult "y_pred[2] * 100"
-  set three  py:runresult "y_pred[3] * 100"
-  set four   py:runresult "y_pred[4] * 100"
-  set five   py:runresult "y_pred[5] * 100"
-  set six    py:runresult "y_pred[6] * 100"
-  set seven  py:runresult "y_pred[7] * 100"
-  set eight  py:runresult "y_pred[8] * 100"
-  set nine   py:runresult "y_pred[9] * 100"
+  ;; return probabilities per digit (softmax layer)
+  set probabilities py:runresult "y_pred"
 end
 
 to clear
   clear-patches
+  predict
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-318
-27
-682
-392
+297
+37
+687
+428
 -1
 -1
-12.72414
+13.643
 1
 10
 1
@@ -180,7 +161,7 @@ MONITOR
 129
 224
 Prob. of 0 [%]
-zero
+100 * item 0 probabilities
 5
 1
 13
@@ -191,7 +172,7 @@ MONITOR
 246
 224
 Prob. of 1 [%]
-one
+100 * item 1 probabilities
 5
 1
 13
@@ -202,7 +183,7 @@ MONITOR
 128
 283
 Prob. of 2 [%]
-two
+100 * item 2 probabilities
 5
 1
 13
@@ -213,7 +194,7 @@ MONITOR
 246
 285
 Prob. of 3 [%]
-three
+100 * item 3 probabilities
 5
 1
 13
@@ -224,7 +205,7 @@ MONITOR
 127
 343
 Prob. of 4 [%]
-four
+100 * item 4 probabilities
 5
 1
 13
@@ -235,7 +216,7 @@ MONITOR
 246
 344
 Prob. of 5 [%]
-five
+100 * item 5 probabilities
 5
 1
 13
@@ -246,7 +227,7 @@ MONITOR
 127
 402
 Prob. of 6 [%]
-six
+100 * item 6 probabilities
 5
 1
 13
@@ -257,7 +238,7 @@ MONITOR
 247
 402
 Prob. of 7 [%]
-seven
+100 * item 7 probabilities
 5
 1
 13
@@ -268,7 +249,7 @@ MONITOR
 127
 463
 Prob. of 8 [%]
-eight
+100 * item 8 probabilities
 5
 1
 13
@@ -279,7 +260,7 @@ MONITOR
 247
 464
 Prob. of 9 [%]
-nine
+100 * item 9 probabilities
 5
 1
 13
@@ -316,7 +297,7 @@ Create new model in `Python` e.g for letters recognition.
 
 ## NETLOGO FEATURES
 
-Usage of `foreach` in `foreach` loop to create _pcolor_ list (_predict_ function).
+Usage of `map` in `map` to get pcolor of the patches (_predict_ function).
 
 ## COPYRIGHT
 
