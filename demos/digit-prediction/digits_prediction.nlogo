@@ -23,7 +23,6 @@ to draw
   [
     ask patch mouse-xcor mouse-ycor
     [
-      predict
       ifelse erase?
       [
         set pcolor black
@@ -31,6 +30,7 @@ to draw
       [
         set pcolor white
       ]
+      predict
     ]
   ]
   display
