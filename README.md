@@ -5,10 +5,12 @@ https://github.com/NetLogo/Python-Extension is now the canonical version of this
 This NetLogo extension allows you to run Python code from NetLogo. It works with both Python 2 and 3, and should work with almost all Python libraries.
 
 ## Building
+Make sure your sbt is at least at version 0.13.6
 
 Run `sbt package`.
 
-If compilation succeeds, `py.jar` will be created. This file and `pyext.py` should then be placed in a folder named `py` in your NetLogo `extensions` directory.
+If compilation succeeds, `py.jar` will be created. If compilation succeeds, `py.jar` will be created in the py directory. Copy the `py` directory to your NetLogo `extensions` directory.
+
 ## Using
 
 As with all NetLogo extensions, you must declare that you're using this extension in your NetLogo code with:
