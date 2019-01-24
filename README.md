@@ -5,11 +5,12 @@ https://github.com/NetLogo/Python-Extension is now the canonical version of this
 This NetLogo extension allows you to run Python code from NetLogo. It works with both Python 2 and 3, and should work with almost all Python libraries.
 
 ## Building
+
 Make sure your sbt is at least at version 0.13.6
 
 Run `sbt package`.
 
-If compilation succeeds, `py.jar` will be created. If compilation succeeds, `py.jar` will be created in the py directory. Copy the `py` directory to your NetLogo `extensions` directory.
+If compilation succeeds, `py.jar` will be created. If compilation succeeds, `py.jar` will be created in the `py` directory. Copy the `py` directory to your NetLogo `extensions` directory.
 
 ## Using
 
@@ -117,7 +118,7 @@ The path may be relative or absolute. So, if you have a virtual environment in t
 ```NetLogo
 py:setup "myenv/bin/python"
 ```
-    
+
 
 
 ### `py:python`
@@ -239,5 +240,3 @@ Sets a variable in the Python session with the given name to the given NetLogo v
 py:set "x" [1 2 3]
 show py:runresult "x" ;; Shows [1 2 3]
 ```
-
-
