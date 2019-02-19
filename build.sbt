@@ -21,7 +21,7 @@ lazy val demoNames = List(
 )
 lazy val demoFiles = demoNames.map(n => demoDir(_ / n))
 
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.8"
 
 scalaSource in Compile := baseDirectory.value / "src"
 
@@ -32,4 +32,7 @@ libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"
 netLogoPackageExtras += (baseDirectory(_ / "pyext.py").value, "pyext.py")
 netLogoPackageExtras += (baseDirectory(_ / "tests.txt").value, "tests.txt")
 
-netLogoPackageExtras ++= demoNames.map(n => (demoDir.value / n, s"demos/$n") )
+netLogoPackageExtras ++= {
+  val demoDirVal = demoDir.value
+  demoNames.map(n => (demoDirVal / n, s"demos/$n") )
+}
