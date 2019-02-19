@@ -2,7 +2,7 @@ enablePlugins(org.nlogo.build.NetLogoExtension)
 
 enablePlugins(org.nlogo.build.ExtensionDocumentationPlugin)
 
-netLogoVersion := "6.0.2"
+netLogoVersion := "6.0.4-9328ba6"
 
 netLogoClassManager := "org.nlogo.py.PythonExtension"
 
