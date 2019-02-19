@@ -6,6 +6,8 @@ netLogoVersion := "6.0.4-9328ba6"
 
 netLogoClassManager := "org.nlogo.py.PythonExtension"
 
+version := "1.0.0"
+
 netLogoExtName := "py"
 
 netLogoZipSources := false
