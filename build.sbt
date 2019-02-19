@@ -32,7 +32,6 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warning
 libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"
 
 netLogoPackageExtras += (baseDirectory(_ / "pyext.py").value, "pyext.py")
-netLogoPackageExtras += (baseDirectory(_ / "tests.txt").value, "tests.txt")
 
 netLogoPackageExtras ++= {
   val demoDirVal = demoDir.value
