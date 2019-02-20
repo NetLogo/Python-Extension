@@ -6,22 +6,15 @@ netLogoVersion := "6.0.4-9328ba6"
 
 netLogoClassManager := "org.nlogo.py.PythonExtension"
 
-version := "1.0.0"
+version := "0.3.0"
+
+isSnapshot := true
 
 netLogoExtName := "py"
 
 netLogoZipSources := false
 
-netLogoTarget := org.nlogo.build.NetLogoExtension.directoryTarget(baseDirectory.value / "py")
-
-lazy val demoDir = baseDirectory(_ / "demos")
-lazy val demoNames = List(
-  "Flocking Clusters.nlogo",
-  "Wolf Sheep Predation - Static 3D Plot.nlogo",
-  "Wolf Sheep Predation - Real-time 3D Plot.nlogo",
-  "Traffic Basic - Reinforcement.nlogo"
-)
-lazy val demoFiles = demoNames.map(n => demoDir(_ / n))
+netLogoTarget := org.nlogo.build.NetLogoExtension.directoryTarget(baseDirectory.value)
 
 scalaVersion := "2.12.8"
 
@@ -31,9 +24,4 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warning
 
 libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.5.3"
 
-netLogoPackageExtras += (baseDirectory(_ / "pyext.py").value, "pyext.py")
-
-netLogoPackageExtras ++= {
-  val demoDirVal = demoDir.value
-  demoNames.map(n => (demoDirVal / n, s"demos/$n") )
-}
+netLogoPackageExtras += (baseDirectory(_ / "src" / "pyext.py").value, "pyext.py")
