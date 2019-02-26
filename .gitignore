@@ -1,5 +1,6 @@
 \.*
-target/
+extensions/
 py/
+target/
 *.jar
 /pyext.py

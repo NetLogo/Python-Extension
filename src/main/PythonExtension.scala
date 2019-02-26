@@ -1,5 +1,4 @@
-package org.nlogo.py
-
+package org.nlogo.extensions.py
 
 import java.awt.GraphicsEnvironment
 import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, Closeable, File, FileInputStream, FileOutputStream, IOException, InputStreamReader}

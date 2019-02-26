@@ -1,4 +1,4 @@
-package org.nlogo.py
+package org.nlogo.extensions.py
 
 import java.awt.{BorderLayout, FileDialog, GridBagLayout, Insets, GridBagConstraints => GBC}
 import java.io.File
