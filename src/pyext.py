@@ -116,11 +116,14 @@ class FlexibleEncoder(json.JSONEncoder):
             return json.JSONEncoder.default(self, o)  # let it error
 
 
-def logo_responder(port):
+def logo_responder():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        sock.bind(('localhost', port))
+        sock.bind(('localhost', 0))
         sock.listen(0)
+        _, port = sock.getsockname()
+        sys.stdout.write("{}\n".format(port))
+        sys.stdout.flush()
         conn, addr = sock.accept()
         try:
             inp = ConnectionReader(conn)
@@ -166,4 +169,4 @@ def flush():
 
 if __name__ == '__main__':
     sys.path.insert(0, os.getcwd())
-    logo_responder(int(sys.argv[-1]))
+    logo_responder()

@@ -168,22 +168,45 @@ object PythonSubprocess {
 
 
   def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
+
+    def earlyFail(proc: Process, prefix: String) = {
+      val stdout = readAllReady(new InputStreamReader(proc.getInputStream))
+      val stderr = readAllReady(new InputStreamReader(proc.getErrorStream))
+      val msg = (stderr, stdout) match {
+        case ("", s) => s
+        case (s, "") => s
+        case (e, o) => s"Error output:\n$e\n\nOutput:\n$o"
+      }
+      throw new ExtensionException(s"$prefix\n$msg")
+    }
+
     val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
 
-    val port = findOpenPort
     ws.getExtensionManager
 
     val prefix = new File(ws.asInstanceOf[AbstractWorkspace].fileManager.prefix)
     // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript :+ port.toString).asJava).directory(workingDirectory)
+    val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript).asJava).directory(workingDirectory)
     val proc = try {
       pb.start()
     } catch {
       // TODO: Better error message here
       case e: IOException => throw new ExtensionException(s"Failed to find execution shell. This is a bug. Please report.", e)
     }
+
+    val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
+    val portLine = pbInput.readLine
+    pbInput.close
+
+    val port = try {
+      portLine.toInt
+    } catch {
+      case e: java.lang.NumberFormatException =>
+        earlyFail(proc, s"Python process did not provide a port to connect with:\n$portLine")
+    }
+
     var socket: Socket = null
     while (socket == null && proc.isAlive) {
       try {
@@ -193,19 +216,7 @@ object PythonSubprocess {
         case e: SecurityException => throw new ExtensionException(e)
       }
     }
-    if (!proc.isAlive) {
-      val stdout = readAllReady(new InputStreamReader(proc.getInputStream))
-      val stderr = readAllReady(new InputStreamReader(proc.getErrorStream))
-      val msg = (stderr, stdout) match {
-        case ("", s) => s
-        case (s, "") => s
-        case (e, o) => s"Error output:\n$e\n\nOutput:\n$o"
-      }
-      throw new ExtensionException(
-        "Python process failed to start:\n" +
-        msg
-      )
-    }
+    if (!proc.isAlive) { earlyFail(proc, "Python process failed to start:") }
     new PythonSubprocess(ws, proc, socket)
   }
 
@@ -255,16 +266,6 @@ object PythonSubprocess {
     val proc = new ProcessBuilder(cmd: _*).redirectError(Redirect.PIPE).redirectInput(Redirect.PIPE).start()
     val in = new BufferedReader(new InputStreamReader(proc.getInputStream))
     Iterator.continually(in.readLine()).takeWhile(_ != null).toList
-  }
-
-  private def findOpenPort: Int = {
-    var testServer: ServerSocket = null
-    try {
-      testServer = new ServerSocket(0)
-      testServer.getLocalPort
-    } finally {
-      if (testServer != null) testServer.close()
-    }
   }
 }
 
