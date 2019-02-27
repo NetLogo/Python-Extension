@@ -12,6 +12,8 @@ Run `sbt package`.
 
 If compilation succeeds, `py.jar` will be created and the required dependencies will be copied to the root of the repository.  Copy all the `jar` files and `pyext.py` from the repository root to a `py` directory inside your NetLogo `extensions` directory.
 
+Run `sbt test` to run the NetLogo language test code from `tests.txt`.
+
 ## Using
 
 As with all NetLogo extensions, you must declare that you're using this extension in your NetLogo code with:
