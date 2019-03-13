@@ -198,7 +198,6 @@ object PythonSubprocess {
 
     val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
     val portLine = pbInput.readLine
-    pbInput.close
 
     val port = try {
       portLine.toInt

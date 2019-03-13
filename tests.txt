@@ -9,6 +9,8 @@
 open-connection-python2
   extensions [ py ]
   O> py:setup py:python2
+  O> py:run "print('python hi1!')"
+  O> py:run "print('python hi2!')"
 
 python2-gets-python-2
   extensions [ py ]
