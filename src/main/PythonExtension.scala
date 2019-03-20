@@ -527,7 +527,9 @@ class PythonExtension extends api.DefaultClassManager {
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
-    pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
+    if (!PythonExtension.isHeadless) {
+      pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
+    }
   }
 }
 
