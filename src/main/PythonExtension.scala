@@ -15,7 +15,7 @@ import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothi
 import org.json4s.jackson.JsonMethods.{mapper, parse}
 import org.nlogo.api
 import org.nlogo.api.Exceptions.ignoring
-import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, OutputDestination, Workspace}
+import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, FileIO, OutputDestination, Workspace}
 import org.nlogo.app.App
 import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
 import org.nlogo.nvm.HaltException
@@ -33,7 +33,13 @@ object PythonExtension {
     getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
   ).getParentFile
 
-  val config: PythonConfig = PythonConfig(new File(extDirectory, "python.properties"))
+  private val propFileName = "python.properties"
+
+  private val extCheckFile = new File(extDirectory, propFileName)
+
+  private val propFile = if (extCheckFile.exists) extCheckFile else new File(FileIO.perUserDir("py"), propFileName)
+
+  val config: PythonConfig = PythonConfig(propFile)
 
   def pythonProcess: PythonSubprocess =
     _pythonProcess.getOrElse(throw new ExtensionException(
