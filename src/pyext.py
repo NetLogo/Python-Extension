@@ -5,7 +5,12 @@ import socket
 import sys
 import numbers
 import json
-from collections import Mapping
+
+if sys.version_info[0] > 2 and sys.version_info[1] > 3:
+    from collections.abc import Mapping
+else:
+    from collections import Mapping
+
 import traceback
 import struct
 
