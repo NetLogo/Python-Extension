@@ -172,6 +172,8 @@ object PythonSubprocess {
   val successMsg = 0
   val errorMsg = 1
 
+  private val wrongPathTip = "Check to make sure the correct path was entered in the Python configuration" +
+      " menu or supply the correct path as an argument to PY:SETUP."
 
   def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
 
@@ -198,8 +200,25 @@ object PythonSubprocess {
     val proc = try {
       pb.start()
     } catch {
-      // TODO: Better error message here
-      case e: IOException => throw new ExtensionException(s"Failed to find execution shell. This is a bug. Please report.", e)
+      case e: IOException => {
+        val pythonFile = new File(pythonCmd.head)
+        if (!pythonFile.exists()) {
+          throw new ExtensionException(
+            s"Expected path to Python executable but '$pythonFile' does not exist. $wrongPathTip"
+          )
+        } else if (pythonFile.isDirectory) {
+          throw new ExtensionException(
+            s"Expected path to Python executable but '$pythonFile' is a directory. $wrongPathTip"
+          )
+        } else if (!pythonFile.canExecute) {
+          throw new ExtensionException(
+            s"Cannot run '$pythonFile'. Check to make sure that that file is the Python executable and that NetLogo" +
+                s" has permission to access and run it."
+          )
+        } else {
+          throw new ExtensionException(s"${e.getLocalizedMessage}", e)
+        }
+      }
     }
 
     val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
@@ -209,7 +228,7 @@ object PythonSubprocess {
       portLine.toInt
     } catch {
       case e: java.lang.NumberFormatException =>
-        earlyFail(proc, s"Python process did not provide a port to connect with:\n$portLine")
+        earlyFail(proc, s"Python process did not provide a port to connect with:\n$portLine. $wrongPathTip")
     }
 
     var socket: Socket = null
