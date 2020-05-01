@@ -177,7 +177,7 @@ The output of this reporter is meant to be used with `py:setup`, but you may als
 
 For example, on MacOS with Homebrew installed Python 3:
 ```NetLogo
-observer> show py:python
+observer> show py:python3
 observer: "/usr/local/bin/python3"
 ```
 
