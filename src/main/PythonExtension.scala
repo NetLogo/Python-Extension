@@ -83,7 +83,7 @@ object Handle {
     */
   def apply[R](body: => Try[R]): R = Try(body).flatten match {
     case Failure(he: HaltException) => throw he// We can't actually catch throw InterruptedExceptions, but in case there's a wrapped one
-    case Failure(ie: InterruptedException) =>
+    case Failure(_: InterruptedException) =>
       Thread.interrupted()
       PythonExtension.pythonProcess.invalidateJobs()
       throw new HaltException(true)
@@ -172,8 +172,6 @@ object PythonSubprocess {
   val successMsg = 0
   val errorMsg = 1
 
-  private val wrongPathTip = "Check to make sure the correct path was entered in the Python configuration" +
-      " menu or supply the correct path as an argument to PY:SETUP."
 
   def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
 
@@ -197,29 +195,7 @@ object PythonSubprocess {
     // So we default to the home directory.
     val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
     val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript).asJava).directory(workingDirectory)
-    val proc = try {
-      pb.start()
-    } catch {
-      case e: IOException => {
-        val pythonFile = new File(pythonCmd.head)
-        if (!pythonFile.exists()) {
-          throw new ExtensionException(
-            s"Expected path to Python executable but '$pythonFile' does not exist. $wrongPathTip"
-          )
-        } else if (pythonFile.isDirectory) {
-          throw new ExtensionException(
-            s"Expected path to Python executable but '$pythonFile' is a directory. $wrongPathTip"
-          )
-        } else if (!pythonFile.canExecute) {
-          throw new ExtensionException(
-            s"Cannot run '$pythonFile'. Check to make sure that that file is the Python executable and that NetLogo" +
-                s" has permission to access and run it."
-          )
-        } else {
-          throw new ExtensionException(s"${e.getLocalizedMessage}", e)
-        }
-      }
-    }
+    val proc = pb.start()
 
     val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
     val portLine = pbInput.readLine
@@ -227,8 +203,8 @@ object PythonSubprocess {
     val port = try {
       portLine.toInt
     } catch {
-      case e: java.lang.NumberFormatException =>
-        earlyFail(proc, s"Python process did not provide a port to connect with:\n$portLine. $wrongPathTip")
+      case _: java.lang.NumberFormatException =>
+        earlyFail(proc, s"Process did not provide expected output. Expected a port number but got:\n$portLine")
     }
 
     var socket: Socket = null
@@ -240,7 +216,7 @@ object PythonSubprocess {
         case e: SecurityException => throw new ExtensionException(e)
       }
     }
-    if (!proc.isAlive) { earlyFail(proc, "Python process failed to start:") }
+    if (!proc.isAlive) { earlyFail(proc, s"Process terminated early.") }
     new PythonSubprocess(ws, proc, socket)
   }
 
@@ -564,8 +540,36 @@ object SetupPython extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit = {
-    context.workspace.getModelDir
-    PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, args.map(_.getString))
+    val pythonCmd = args.map(_.getString)
+    try {
+      PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, pythonCmd)
+    } catch {
+      case e: Exception =>
+        // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
+        // exception position, we catch all problems with Python bootup, look for common problems, and then offer advice
+        // accordingly.
+        val prefix = "Python failed to start."
+        val wrongPathTip = "Check to make sure the correct path was entered in the Python configuration" +
+            " menu or supply the correct path as an argument to PY:SETUP."
+        val details = s"Details:\n\n${e.getLocalizedMessage}"
+        val suffix = s"$wrongPathTip\n\n$details"
+
+        val pythonFile = new File(pythonCmd.head)
+        pythonFile.length()
+        if (!pythonFile.exists) {
+          throw new ExtensionException(
+            s"$prefix Expected path to Python executable but '$pythonFile' does not exist. $suffix", e
+          )
+        } else if (pythonFile.isDirectory) {
+          throw new ExtensionException(
+            s"$prefix Expected path to Python executable but '$pythonFile' is a directory. $suffix", e
+          )
+        } else if (!pythonFile.canExecute) {
+          throw new ExtensionException(s"$prefix NetLogo does not have permission to run '$pythonFile'. $suffix", e)
+        } else {
+          throw new ExtensionException(s"$prefix Encountered an error while running '$pythonFile'. $suffix", e)
+        }
+    }
   }
 }
 
