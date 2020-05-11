@@ -6,7 +6,7 @@ netLogoVersion := "6.1.1"
 
 netLogoClassManager := "org.nlogo.extensions.py.PythonExtension"
 
-version := "0.4.3"
+version := "0.4.4"
 
 isSnapshot := true
 
