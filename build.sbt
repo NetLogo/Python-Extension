@@ -2,7 +2,7 @@ enablePlugins(org.nlogo.build.NetLogoExtension)
 
 enablePlugins(org.nlogo.build.ExtensionDocumentationPlugin)
 
-netLogoVersion := "6.1.1"
+netLogoVersion := "6.1.1-c82c397"
 
 netLogoClassManager := "org.nlogo.extensions.py.PythonExtension"
 
@@ -16,7 +16,7 @@ netLogoZipSources := false
 
 netLogoTarget := org.nlogo.build.NetLogoExtension.directoryTarget(baseDirectory.value)
 
-scalaVersion := "2.12.11"
+scalaVersion := "2.12.12"
 
 scalaSource in Test := baseDirectory.value / "src" / "test"
 
