@@ -60,4 +60,3 @@ You can do this by either:
 python3=/path/to/python3
 python2=/path/to/python2
 ```
-

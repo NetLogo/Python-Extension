@@ -1,4 +1,3 @@
-https://github.com/NetLogo/Python-Extension is now the canonical version of this repository.
 
 # NetLogo Python extension
 
@@ -242,3 +241,5 @@ Sets a variable in the Python session with the given name to the given NetLogo v
 py:set "x" [1 2 3]
 show py:runresult "x" ;; Shows [1 2 3]
 ```
+
+
