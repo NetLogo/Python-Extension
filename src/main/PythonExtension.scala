@@ -9,7 +9,6 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.swing.{JMenu, SwingUtilities}
-
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
 import org.json4s.jackson.JsonMethods.{mapper, parse}
@@ -25,8 +24,8 @@ import scala.collection.JavaConverters._
 import scala.concurrent.SyncVar
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
-
 import org.me.Subprocess
+import org.me.Subprocess.path
 
 object PythonExtension {
   private var _pythonProcess: Option[Subprocess] = None
@@ -61,41 +60,41 @@ object PythonExtension {
 
   def pythonNotFound = throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the configuration menu.")
 
-  def validNum(d: Double): Double = d match {
-    case x if x.isInfinite => throw new ExtensionException("Python reported a number too large for NetLogo.")
-    case x if x.isNaN => throw new ExtensionException("Python reported a non-numeric value from a mathematical operation.")
-    case x => x
-  }
+//  def validNum(d: Double): Double = d match {
+//    case x if x.isInfinite => throw new ExtensionException("Python reported a number too large for NetLogo.")
+//    case x if x.isNaN => throw new ExtensionException("Python reported a non-numeric value from a mathematical operation.")
+//    case x => x
+//  }
 
 }
 
-object Haltable {
-  def apply[R](body: => R): R = try body catch {
-    case _: InterruptedException =>
-      Thread.interrupted()
-      PythonExtension.pythonProcess.invalidateJobs()
-      throw new HaltException(true)
-    case e: Throwable => throw e
-  }
-}
-
-object Handle {
-  /**
-    * Deal with Exceptions (both inside the Try and non-fatal thrown) in a NetLogo-friendly way.
-    */
-  def apply[R](body: => Try[R]): R = Try(body).flatten match {
-    case Failure(he: HaltException) => throw he// We can't actually catch throw InterruptedExceptions, but in case there's a wrapped one
-    case Failure(_: InterruptedException) =>
-      Thread.interrupted()
-      PythonExtension.pythonProcess.invalidateJobs()
-      throw new HaltException(true)
-    case Failure(ee: ExtensionException) => throw ee
-    case Failure(ex: Exception) => throw new ExtensionException(ex)
-    case Failure(th: Throwable) => throw th
-    case Success(x) => x
-  }
-
-}
+//object Haltable {
+//  def apply[R](body: => R): R = try body catch {
+//    case _: InterruptedException =>
+//      Thread.interrupted()
+//      PythonExtension.pythonProcess.invalidateJobs()
+//      throw new HaltException(true)
+//    case e: Throwable => throw e
+//  }
+//}
+//
+//object Handle {
+//  /**
+//    * Deal with Exceptions (both inside the Try and non-fatal thrown) in a NetLogo-friendly way.
+//    */
+//  def apply[R](body: => Try[R]): R = Try(body).flatten match {
+//    case Failure(he: HaltException) => throw he// We can't actually catch throw InterruptedExceptions, but in case there's a wrapped one
+//    case Failure(_: InterruptedException) =>
+//      Thread.interrupted()
+//      PythonExtension.pythonProcess.invalidateJobs()
+//      throw new HaltException(true)
+//    case Failure(ee: ExtensionException) => throw ee
+//    case Failure(ex: Exception) => throw new ExtensionException(ex)
+//    case Failure(th: Throwable) => throw th
+//    case Success(x) => x
+//  }
+//
+//}
 
 
 object Using {
@@ -162,17 +161,17 @@ object PythonBinary {
 case class PythonBinary(file: File, version: (Int, Int, Int))
 
 object PythonSubprocess {
-  // In and out
-  val typeSize = 1
-
-  // Out types
-  val stmtMsg = 0
-  val exprMsg = 1
-  val assnMsg = 2
-
-  // In types
-  val successMsg = 0
-  val errorMsg = 1
+//  // In and out
+//  val typeSize = 1
+//
+//  // Out types
+//  val stmtMsg = 0
+//  val exprMsg = 1
+//  val assnMsg = 2
+//
+//  // In types
+//  val successMsg = 0
+//  val errorMsg = 1
 
 
 //  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
@@ -249,26 +248,26 @@ object PythonSubprocess {
       .flatMap(_.listFiles((_, name) => name.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
       .flatMap(PythonBinary.fromFile)
 
-  def path: Seq[File] = {
-    val basePath = System.getenv("PATH")
-    val os = System.getProperty("os.name").toLowerCase
-
-    val unsplitPath = if (os.contains("mac") && basePath == "/usr/bin:/bin:/usr/sbin:/sbin")
-    // On MacOS, .app files are executed with a neutered PATH environment variable. The problem is that if users are
-    // using Homebrew Python or similar, it won't be on that PATH. So, we check if we're on MacOS and if we have that
-    // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
-    // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
-      getCmdOutput("/bin/bash", "-l", "-c", "echo $PATH").head ++ basePath
-    else
-      basePath
-    unsplitPath.split(File.pathSeparatorChar).map(new File(_)).filter(f => f.isDirectory)
-  }
-
-  private def getCmdOutput(cmd: String*): List[String] = {
-    val proc = new ProcessBuilder(cmd: _*).redirectError(Redirect.PIPE).redirectInput(Redirect.PIPE).start()
-    val in = new BufferedReader(new InputStreamReader(proc.getInputStream))
-    Iterator.continually(in.readLine()).takeWhile(_ != null).toList
-  }
+//  def path: Seq[File] = {
+//    val basePath = System.getenv("PATH")
+//    val os = System.getProperty("os.name").toLowerCase
+//
+//    val unsplitPath = if (os.contains("mac") && basePath == "/usr/bin:/bin:/usr/sbin:/sbin")
+//    // On MacOS, .app files are executed with a neutered PATH environment variable. The problem is that if users are
+//    // using Homebrew Python or similar, it won't be on that PATH. So, we check if we're on MacOS and if we have that
+//    // neuteredPATH. If so, we want to execute with the users actual PATH. We use `path_helper` to get that. It's not
+//    // perfect; it will miss PATHs defined in certain files, but hopefully it's good enough.
+//      getCmdOutput("/bin/bash", "-l", "-c", "echo $PATH").head ++ basePath
+//    else
+//      basePath
+//    unsplitPath.split(File.pathSeparatorChar).map(new File(_)).filter(f => f.isDirectory)
+//  }
+//
+//  private def getCmdOutput(cmd: String*): List[String] = {
+//    val proc = new ProcessBuilder(cmd: _*).redirectError(Redirect.PIPE).redirectInput(Redirect.PIPE).start()
+//    val in = new BufferedReader(new InputStreamReader(proc.getInputStream))
+//    Iterator.continually(in.readLine()).takeWhile(_ != null).toList
+//  }
 }
 
 //class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
@@ -582,9 +581,7 @@ object Run extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit =
-    Handle { Haltable {
-      PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n")).flatMap(_.get)
-    } }
+    PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n")).get.get
 }
 
 object RunResult extends api.Reporter {
@@ -594,17 +591,13 @@ object RunResult extends api.Reporter {
   )
 
   override def report(args: Array[Argument], context: Context): AnyRef =
-    Handle { Haltable {
-      PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n")).flatMap(_.get)
-    } }
+    PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n")).get.get
 }
 
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
   override def perform(args: Array[Argument], context: Context): Unit =
-    Handle { Haltable {
-      PythonExtension.pythonProcess.assign(args(0).getString, args(1).get).flatMap(_.get)
-    } }
+    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get).get.get
 }
 
 
