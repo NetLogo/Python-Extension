@@ -26,8 +26,10 @@ import scala.concurrent.SyncVar
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
+import org.me.Subprocess
+
 object PythonExtension {
-  private var _pythonProcess: Option[PythonSubprocess] = None
+  private var _pythonProcess: Option[Subprocess] = None
 
   val extDirectory: File = new File(
     getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
@@ -41,11 +43,11 @@ object PythonExtension {
 
   val config: PythonConfig = PythonConfig(propFile)
 
-  def pythonProcess: PythonSubprocess =
+  def pythonProcess: Subprocess =
     _pythonProcess.getOrElse(throw new ExtensionException(
       "Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
 
-  def pythonProcess_=(proc: PythonSubprocess): Unit = {
+  def pythonProcess_=(proc: Subprocess): Unit = {
     _pythonProcess.foreach(_.close())
     _pythonProcess =  Some(proc)
   }
@@ -173,66 +175,66 @@ object PythonSubprocess {
   val errorMsg = 1
 
 
-  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
-
-    def earlyFail(proc: Process, prefix: String) = {
-      val stdout = readAllReady(new InputStreamReader(proc.getInputStream))
-      val stderr = readAllReady(new InputStreamReader(proc.getErrorStream))
-      val msg = (stderr, stdout) match {
-        case ("", s) => s
-        case (s, "") => s
-        case (e, o) => s"Error output:\n$e\n\nOutput:\n$o"
-      }
-      throw new ExtensionException(s"$prefix\n$msg")
-    }
-
-    val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
-
-    ws.getExtensionManager
-
-    val prefix = new File(ws.asInstanceOf[AbstractWorkspace].fileManager.prefix)
-    // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
-    // So we default to the home directory.
-    val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
-    val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript).asJava).directory(workingDirectory)
-    val proc = pb.start()
-
-    val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
-    val portLine = pbInput.readLine
-
-    val port = try {
-      portLine.toInt
-    } catch {
-      case _: java.lang.NumberFormatException =>
-        earlyFail(proc, s"Process did not provide expected output. Expected a port number but got:\n$portLine")
-    }
-
-    var socket: Socket = null
-    while (socket == null && proc.isAlive) {
-      try {
-        socket = new Socket("localhost", port)
-      } catch {
-        case _: IOException => // keep going
-        case e: SecurityException => throw new ExtensionException(e)
-      }
-    }
-    if (!proc.isAlive) { earlyFail(proc, s"Process terminated early.") }
-    new PythonSubprocess(ws, proc, socket)
-  }
-
-  def readAllReady(in: InputStreamReader): String = {
-    val sb = new StringBuilder
-    while (in.ready) sb.append(in.read().toChar)
-    sb.toString
-  }
-
-  private def cmd(args: Seq[String]): Seq[String] = {
-    val os = System.getProperty("os.name").toLowerCase
-    if (os.contains("mac"))
-      List("/bin/bash", "-l", "-c", args.map(a => s"'$a'").mkString(" "))
-    else
-      args
-  }
+//  def start(ws: Workspace, pythonCmd: Seq[String]): PythonSubprocess = {
+//
+//    def earlyFail(proc: Process, prefix: String) = {
+//      val stdout = readAllReady(new InputStreamReader(proc.getInputStream))
+//      val stderr = readAllReady(new InputStreamReader(proc.getErrorStream))
+//      val msg = (stderr, stdout) match {
+//        case ("", s) => s
+//        case (s, "") => s
+//        case (e, o) => s"Error output:\n$e\n\nOutput:\n$o"
+//      }
+//      throw new ExtensionException(s"$prefix\n$msg")
+//    }
+//
+//    val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
+//
+//    ws.getExtensionManager
+//
+//    val prefix = new File(ws.asInstanceOf[AbstractWorkspace].fileManager.prefix)
+//    // When running language tests, prefix is blank and, in general, processes can't run in non-existent directories.
+//    // So we default to the home directory.
+//    val workingDirectory = if (prefix.exists) prefix else new File(System.getProperty("user.home"))
+//    val pb = new ProcessBuilder(cmd(pythonCmd :+ pyScript).asJava).directory(workingDirectory)
+//    val proc = pb.start()
+//
+//    val pbInput = new BufferedReader(new InputStreamReader(proc.getInputStream))
+//    val portLine = pbInput.readLine
+//
+//    val port = try {
+//      portLine.toInt
+//    } catch {
+//      case _: java.lang.NumberFormatException =>
+//        earlyFail(proc, s"Process did not provide expected output. Expected a port number but got:\n$portLine")
+//    }
+//
+//    var socket: Socket = null
+//    while (socket == null && proc.isAlive) {
+//      try {
+//        socket = new Socket("localhost", port)
+//      } catch {
+//        case _: IOException => // keep going
+//        case e: SecurityException => throw new ExtensionException(e)
+//      }
+//    }
+//    if (!proc.isAlive) { earlyFail(proc, s"Process terminated early.") }
+//    new PythonSubprocess(ws, proc, socket)
+//  }
+//
+//  def readAllReady(in: InputStreamReader): String = {
+//    val sb = new StringBuilder
+//    while (in.ready) sb.append(in.read().toChar)
+//    sb.toString
+//  }
+//
+//  private def cmd(args: Seq[String]): Seq[String] = {
+//    val os = System.getProperty("os.name").toLowerCase
+//    if (os.contains("mac"))
+//      List("/bin/bash", "-l", "-c", args.map(a => s"'$a'").mkString(" "))
+//    else
+//      args
+//  }
 
   def python2: Option[File] =
     PythonExtension.config.python2.map(new File(_)).orElse(pythons.find(_.version._1 == 2).map(_.file))
@@ -269,220 +271,220 @@ object PythonSubprocess {
   }
 }
 
-class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
-  // Signals to the executor thread that we're shutting down, so IOException's are to be expected.
-  private val shuttingDown = new AtomicBoolean(false)
-  // Used to distinguish if Python is not responding because it's busy doing something that we want it to do or if it's
-  // busy doing something else.
-  private val isRunningLegitJob = new AtomicBoolean(false)
-
-  val in = new BufferedInputStream(socket.getInputStream)
-  val out = new BufferedOutputStream(socket.getOutputStream)
-
-  val stdout = new InputStreamReader(proc.getInputStream)
-  val stderr = new InputStreamReader(proc.getErrorStream)
-
-  private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-
-  def output(s: String): Unit = {
-    if (GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true")
-      println(s)
-    else
-      SwingUtilities.invokeLater { () =>
-        // outputObject blocks, and we don't want to block.
-        ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
-      }
-  }
-
-  def redirectPipes(): Unit = {
-    val stdoutContents = PythonSubprocess.readAllReady(stdout)
-    val stderrContents = PythonSubprocess.readAllReady(stderr)
-    if (stdoutContents.nonEmpty)
-      output(stdoutContents)
-    if (stderrContents.nonEmpty)
-      output(s"Python error output:\n$stderrContents")
-  }
-
-  /**
-    * Runs the given code by submitting to a STE. Wraps all errors in Try.
-    */
-  private def async[R](body: => Try[R]): SyncVar[Try[R]] = {
-    val result = new SyncVar[Try[R]]
-    executor.execute { () =>
-      try {
-        isRunningLegitJob.set(true)
-        result.put(body)
-      } catch {
-        case _: IOException if shuttingDown.get =>
-        case e: IOException =>
-          close()
-          result.put(Failure(
-            new ExtensionException("Disconnected from Python unexpectedly. Try running py:setup again.", e)
-          ))
-        case _: InterruptedException => Thread.interrupted()
-        case e: Exception => result.put(Failure(e))
-      } finally {
-        isRunningLegitJob.set(false)
-      }
-    }
-    result
-  }
-
-  /**
-    * Uses the give send code to send to data python and the read code to read from Python. Handles response types and
-    * pipe redirection.
-    *
-    * Python errors will be wrapped in Try, but IOExceptions will not.
-    */
-  private def run[R](send: => Unit)(read: => R): Try[R] = {
-    send
-    val t = readByte()
-    val result = if (t == 0) {
-      Success(read)
-    } else {
-      Failure(pythonException())
-    }
-    redirectPipes()
-    result
-  }
-
-  /**
-    * Checks to see if the Python process is responding. There are two reasons it may not be responding:
-    * 1. Python is running a legit job that we are expecting the result of. This can only happen if we didn't block on
-    * Python's response. In this case, we're okay with it not responding, so return Success
-    * 2. A halt was called while Python was doing something long-running. It's still doing that thing, which might be
-    * bad, so we fail in this case.
-    *
-    * The two cases are distinguished using `isRunningLegitJob`
-    */
-  def heartbeat(timeout: Duration = 1.seconds): Try[Unit] = if (!isRunningLegitJob.get) {
-    val hb = async {
-      // Technically this isn't necessary, since our STE should always be waiting on Python if it's doing something.
-      // However, it's probably a good idea in case something goes wrong with the Python process or an STE job bugs out.
-      run { sendStmt("") } {()}
-    }
-    hb.get(timeout.toMillis).getOrElse(
-      Failure(new ExtensionException(
-        "Python process is not responding. You can wait to see if it finishes what it's doing or restart it using py:setup."
-      ))
-    )
-  } else Success(())
-
-  def exec(stmt: String): Try[SyncVar[Try[Unit]]] =
-    heartbeat().map(_ => async {
-      run(sendStmt(stmt))(())
-    })
-
-  def eval(expr: String): Try[SyncVar[Try[AnyRef]]] =
-    heartbeat().map(_ => async {
-      run(sendExpr(expr))(readLogo())
-    })
-
-  def assign(varName: String, value: AnyRef): Try[SyncVar[Try[Unit]]] =
-    heartbeat().map(_ => async {
-      run(sendAssn(varName, value))(())
-    })
-
-  def pythonException(): Exception ={
-    val e = readString()
-    val tb = readString()
-    new ExtensionException(e, new Exception(tb))
-  }
-
-  private def sendStmt(msg: String): Unit = {
-    out.write(PythonSubprocess.stmtMsg)
-    writeString(msg)
-    out.flush()
-  }
-
-  private def sendExpr(msg: String): Unit = {
-    out.write(PythonSubprocess.exprMsg)
-    writeString(msg)
-    out.flush()
-  }
-
-  private def sendAssn(varName: String, value: AnyRef): Unit = {
-    out.write(PythonSubprocess.assnMsg)
-    writeString(varName)
-    writeString(toJson(value))
-    out.flush()
-  }
-
-  private def read(numBytes: Int): Array[Byte] = Array.fill(numBytes)(readByte())
-
-  private def readByte(): Byte = {
-    val nextByte = in.read()
-    if (nextByte == -1) {
-      throw new IOException("Reached end of stream.")
-    }
-    nextByte.toByte
-  }
-
-  private def readInt(): Int = {
-    (readByte() << 24) & 0xff000000 |
-    (readByte() << 16) & 0x00ff0000 |
-    (readByte() <<  8) & 0x0000ff00 |
-    (readByte() <<  0) & 0x000000ff
-  }
-
-  private def readString(): String = {
-    val l = readInt()
-    val s = new String(read(l), "UTF-8")
-    s
-  }
-
-  private def readLogo(): AnyRef = toLogo(readString())
-
-  private def writeInt(i: Int): Unit = {
-    val a = Array((i >>> 24).toByte, (i >>> 16).toByte, (i >>> 8).toByte, i.toByte)
-    out.write(a)
-  }
-
-  private def writeString(str: String): Unit = {
-    val bytes = str.getBytes("UTF-8")
-    writeInt(bytes.length)
-    out.write(bytes)
-  }
-
-  def toJson(x: AnyRef): String = x match {
-    case l: LogoList => "[" + l.map(toJson).mkString(", ") + "]"
-    case b: java.lang.Boolean => if (b) "true" else "false"
-    case Nobody => "None"
-    case o => Dump.logoObject(o, readable = true, exporting = false)
-  }
-
-  def toLogo(s: String): AnyRef = toLogo(parse(s))
-  def toLogo(x: JValue): AnyRef = x match {
-    case JNothing => Nobody
-    case JNull => Nobody
-    case JString(s) => s
-    case JDouble(num) => PythonExtension.validNum(num): JavaDouble
-    case JDecimal(num) => PythonExtension.validNum(num.toDouble): JavaDouble
-    case JLong(num) => PythonExtension.validNum(num.toDouble): JavaDouble
-    case JInt(num) => PythonExtension.validNum(num.toDouble): JavaDouble
-    case JBool(value) => value: JavaBoolean
-    case JObject(obj) => LogoList.fromVector(obj.map(f => LogoList(f._1, toLogo(f._2))).toVector)
-    case JArray(arr) => LogoList.fromVector(arr.map(toLogo).toVector)
-    case JSet(set) => LogoList.fromVector(set.map(toLogo).toVector)
-  }
-
-  def close(): Unit = {
-    shuttingDown.set(true)
-    executor.shutdownNow()
-    ignoring(classOf[IOException])(in.close())
-    ignoring(classOf[IOException])(out.close())
-    ignoring(classOf[IOException])(socket.close())
-    proc.destroyForcibly()
-    proc.waitFor(3, TimeUnit.SECONDS)
-    if (proc.isAlive)
-      throw new ExtensionException("Python process failed to shutdown. Please shut it down via your process manager")
-  }
-
-  /**
-    * CALL THIS ON HALT!
-    */
-  def invalidateJobs(): Unit = isRunningLegitJob.set(false)
-}
+//class PythonSubprocess(ws: Workspace, proc : Process, socket: Socket) {
+//  // Signals to the executor thread that we're shutting down, so IOException's are to be expected.
+//  private val shuttingDown = new AtomicBoolean(false)
+//  // Used to distinguish if Python is not responding because it's busy doing something that we want it to do or if it's
+//  // busy doing something else.
+//  private val isRunningLegitJob = new AtomicBoolean(false)
+//
+//  val in = new BufferedInputStream(socket.getInputStream)
+//  val out = new BufferedOutputStream(socket.getOutputStream)
+//
+//  val stdout = new InputStreamReader(proc.getInputStream)
+//  val stderr = new InputStreamReader(proc.getErrorStream)
+//
+//  private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+//
+//  def output(s: String): Unit = {
+//    if (GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true")
+//      println(s)
+//    else
+//      SwingUtilities.invokeLater { () =>
+//        // outputObject blocks, and we don't want to block.
+//        ws.outputObject(s, null, addNewline = true, readable = false, OutputDestination.Normal)
+//      }
+//  }
+//
+//  def redirectPipes(): Unit = {
+//    val stdoutContents = PythonSubprocess.readAllReady(stdout)
+//    val stderrContents = PythonSubprocess.readAllReady(stderr)
+//    if (stdoutContents.nonEmpty)
+//      output(stdoutContents)
+//    if (stderrContents.nonEmpty)
+//      output(s"Python error output:\n$stderrContents")
+//  }
+//
+//  /**
+//    * Runs the given code by submitting to a STE. Wraps all errors in Try.
+//    */
+//  private def async[R](body: => Try[R]): SyncVar[Try[R]] = {
+//    val result = new SyncVar[Try[R]]
+//    executor.execute { () =>
+//      try {
+//        isRunningLegitJob.set(true)
+//        result.put(body)
+//      } catch {
+//        case _: IOException if shuttingDown.get =>
+//        case e: IOException =>
+//          close()
+//          result.put(Failure(
+//            new ExtensionException("Disconnected from Python unexpectedly. Try running py:setup again.", e)
+//          ))
+//        case _: InterruptedException => Thread.interrupted()
+//        case e: Exception => result.put(Failure(e))
+//      } finally {
+//        isRunningLegitJob.set(false)
+//      }
+//    }
+//    result
+//  }
+//
+//  /**
+//    * Uses the give send code to send to data python and the read code to read from Python. Handles response types and
+//    * pipe redirection.
+//    *
+//    * Python errors will be wrapped in Try, but IOExceptions will not.
+//    */
+//  private def run[R](send: => Unit)(read: => R): Try[R] = {
+//    send
+//    val t = readByte()
+//    val result = if (t == 0) {
+//      Success(read)
+//    } else {
+//      Failure(pythonException())
+//    }
+//    redirectPipes()
+//    result
+//  }
+//
+//  /**
+//    * Checks to see if the Python process is responding. There are two reasons it may not be responding:
+//    * 1. Python is running a legit job that we are expecting the result of. This can only happen if we didn't block on
+//    * Python's response. In this case, we're okay with it not responding, so return Success
+//    * 2. A halt was called while Python was doing something long-running. It's still doing that thing, which might be
+//    * bad, so we fail in this case.
+//    *
+//    * The two cases are distinguished using `isRunningLegitJob`
+//    */
+//  def heartbeat(timeout: Duration = 1.seconds): Try[Unit] = if (!isRunningLegitJob.get) {
+//    val hb = async {
+//      // Technically this isn't necessary, since our STE should always be waiting on Python if it's doing something.
+//      // However, it's probably a good idea in case something goes wrong with the Python process or an STE job bugs out.
+//      run { sendStmt("") } {()}
+//    }
+//    hb.get(timeout.toMillis).getOrElse(
+//      Failure(new ExtensionException(
+//        "Python process is not responding. You can wait to see if it finishes what it's doing or restart it using py:setup."
+//      ))
+//    )
+//  } else Success(())
+//
+//  def exec(stmt: String): Try[SyncVar[Try[Unit]]] =
+//    heartbeat().map(_ => async {
+//      run(sendStmt(stmt))(())
+//    })
+//
+//  def eval(expr: String): Try[SyncVar[Try[AnyRef]]] =
+//    heartbeat().map(_ => async {
+//      run(sendExpr(expr))(readLogo())
+//    })
+//
+//  def assign(varName: String, value: AnyRef): Try[SyncVar[Try[Unit]]] =
+//    heartbeat().map(_ => async {
+//      run(sendAssn(varName, value))(())
+//    })
+//
+//  def pythonException(): Exception ={
+//    val e = readString()
+//    val tb = readString()
+//    new ExtensionException(e, new Exception(tb))
+//  }
+//
+//  private def sendStmt(msg: String): Unit = {
+//    out.write(PythonSubprocess.stmtMsg)
+//    writeString(msg)
+//    out.flush()
+//  }
+//
+//  private def sendExpr(msg: String): Unit = {
+//    out.write(PythonSubprocess.exprMsg)
+//    writeString(msg)
+//    out.flush()
+//  }
+//
+//  private def sendAssn(varName: String, value: AnyRef): Unit = {
+//    out.write(PythonSubprocess.assnMsg)
+//    writeString(varName)
+//    writeString(toJson(value))
+//    out.flush()
+//  }
+//
+//  private def read(numBytes: Int): Array[Byte] = Array.fill(numBytes)(readByte())
+//
+//  private def readByte(): Byte = {
+//    val nextByte = in.read()
+//    if (nextByte == -1) {
+//      throw new IOException("Reached end of stream.")
+//    }
+//    nextByte.toByte
+//  }
+//
+//  private def readInt(): Int = {
+//    (readByte() << 24) & 0xff000000 |
+//    (readByte() << 16) & 0x00ff0000 |
+//    (readByte() <<  8) & 0x0000ff00 |
+//    (readByte() <<  0) & 0x000000ff
+//  }
+//
+//  private def readString(): String = {
+//    val l = readInt()
+//    val s = new String(read(l), "UTF-8")
+//    s
+//  }
+//
+//  private def readLogo(): AnyRef = toLogo(readString())
+//
+//  private def writeInt(i: Int): Unit = {
+//    val a = Array((i >>> 24).toByte, (i >>> 16).toByte, (i >>> 8).toByte, i.toByte)
+//    out.write(a)
+//  }
+//
+//  private def writeString(str: String): Unit = {
+//    val bytes = str.getBytes("UTF-8")
+//    writeInt(bytes.length)
+//    out.write(bytes)
+//  }
+//
+//  def toJson(x: AnyRef): String = x match {
+//    case l: LogoList => "[" + l.map(toJson).mkString(", ") + "]"
+//    case b: java.lang.Boolean => if (b) "true" else "false"
+//    case Nobody => "None"
+//    case o => Dump.logoObject(o, readable = true, exporting = false)
+//  }
+//
+//  def toLogo(s: String): AnyRef = toLogo(parse(s))
+//  def toLogo(x: JValue): AnyRef = x match {
+//    case JNothing => Nobody
+//    case JNull => Nobody
+//    case JString(s) => s
+//    case JDouble(num) => PythonExtension.validNum(num): JavaDouble
+//    case JDecimal(num) => PythonExtension.validNum(num.toDouble): JavaDouble
+//    case JLong(num) => PythonExtension.validNum(num.toDouble): JavaDouble
+//    case JInt(num) => PythonExtension.validNum(num.toDouble): JavaDouble
+//    case JBool(value) => value: JavaBoolean
+//    case JObject(obj) => LogoList.fromVector(obj.map(f => LogoList(f._1, toLogo(f._2))).toVector)
+//    case JArray(arr) => LogoList.fromVector(arr.map(toLogo).toVector)
+//    case JSet(set) => LogoList.fromVector(set.map(toLogo).toVector)
+//  }
+//
+//  def close(): Unit = {
+//    shuttingDown.set(true)
+//    executor.shutdownNow()
+//    ignoring(classOf[IOException])(in.close())
+//    ignoring(classOf[IOException])(out.close())
+//    ignoring(classOf[IOException])(socket.close())
+//    proc.destroyForcibly()
+//    proc.waitFor(3, TimeUnit.SECONDS)
+//    if (proc.isAlive)
+//      throw new ExtensionException("Python process failed to shutdown. Please shut it down via your process manager")
+//  }
+//
+//  /**
+//    * CALL THIS ON HALT!
+//    */
+//  def invalidateJobs(): Unit = isRunningLegitJob.set(false)
+//}
 
 class PythonExtension extends api.DefaultClassManager {
   var pyMenu: Option[JMenu] = None
@@ -541,8 +543,9 @@ object SetupPython extends api.Command {
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     val pythonCmd = args.map(_.getString)
+    val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
     try {
-      PythonExtension.pythonProcess = PythonSubprocess.start(context.workspace, pythonCmd)
+      PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
@@ -625,7 +628,7 @@ case class FindPython(
 
 object Path extends api.Reporter {
   override def report(args: Array[Argument], context: Context): LogoList =
-    LogoList.fromVector(PythonSubprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
+    LogoList.fromVector(Subprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
 }
