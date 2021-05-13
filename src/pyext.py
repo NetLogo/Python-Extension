@@ -34,63 +34,63 @@ def print_err(s):
     sys.stderr.flush()
 
 
-class ConnectionReader(object):
-    def __init__(self, conn):
-        self.conn = conn
-        self.buff = bytearray()
+# class ConnectionReader(object):
+#     def __init__(self, conn):
+#         self.conn = conn
+#         self.buff = bytearray()
+#
+#     def _get_packet(self):
+#         data = self.conn.recv(1024)
+#         if not data:
+#             raise EOFError('Connection closed')
+#         return data
+#
+#     def read(self, size):
+#         while len(self.buff) < size:
+#             self.buff.extend(self._get_packet())
+#         result = bytes(self.buff[:size])
+#         del self.buff[:size]
+#         return result
+#
+#     def read_json(self):
+#         return json.loads(self.read_string())
+#
+#     def read_int(self):
+#         return struct.unpack('>i', self.read(4))[0]
+#
+#     def read_byte(self):
+#         return struct.unpack('b', self.read(1))[0]
+#
+#     def read_string(self):
+#         length = self.read_int()
+#         return self.read(length).decode('utf-8')
 
-    def _get_packet(self):
-        data = self.conn.recv(1024)
-        if not data:
-            raise EOFError('Connection closed')
-        return data
 
-    def read(self, size):
-        while len(self.buff) < size:
-            self.buff.extend(self._get_packet())
-        result = bytes(self.buff[:size])
-        del self.buff[:size]
-        return result
-
-    def read_json(self):
-        return json.loads(self.read_string())
-
-    def read_int(self):
-        return struct.unpack('>i', self.read(4))[0]
-
-    def read_byte(self):
-        return struct.unpack('b', self.read(1))[0]
-
-    def read_string(self):
-        length = self.read_int()
-        return self.read(length).decode('utf-8')
-
-
-class ConnectionWriter(object):
-    def __init__(self, conn):
-        self.conn = conn
-        self.buff = bytearray()
-
-    def write(self, data):
-        self.buff.extend(data)
-
-    def write_byte(self, b):
-        self.write(struct.pack('b', b))
-
-    def write_int(self, i):
-        self.write(struct.pack('>i', i))
-
-    def write_string(self, s):
-        bs = to_bytes(s)
-        self.write_int(len(bs))
-        self.write(bs)
-
-    def flush(self):
-        self.conn.sendall(self.buff)
-        self.clear()
-
-    def clear(self):
-        self.buff = bytearray()
+# class ConnectionWriter(object):
+#     def __init__(self, conn):
+#         self.conn = conn
+#         self.buff = bytearray()
+#
+#     def write(self, data):
+#         self.buff.extend(data)
+#
+#     def write_byte(self, b):
+#         self.write(struct.pack('b', b))
+#
+#     def write_int(self, i):
+#         self.write(struct.pack('>i', i))
+#
+#     def write_string(self, s):
+#         bs = to_bytes(s)
+#         self.write_int(len(bs))
+#         self.write(bs)
+#
+#     def flush(self):
+#         self.conn.sendall(self.buff)
+#         self.clear()
+#
+#     def clear(self):
+#         self.buff = bytearray()
 
 
 def utf8(bs):
@@ -134,10 +134,10 @@ def logo_responder():
         conn, addr = sock.accept()
         try:
             # inp = ConnectionReader(conn)
-            out = ConnectionWriter(conn)
+            # out = ConnectionWriter(conn)
             encoder = FlexibleEncoder()
             globs = {}
-            print("got connection")
+            # print("got connection")
             for line in conn.makefile():
                 try:
                     # print("new line:", line)
@@ -149,22 +149,28 @@ def logo_responder():
 
                     if type == STMT_MSG:
                         exec(body, globs)
-                        out.write_byte(SUCC_MSG)
+                        conn.sendall(json.dumps({"type" : SUCC_MSG, "body" : ""}).encode('utf-8') + b"\n")
+                        # out.write_byte(SUCC_MSG)
                     elif type == EXPR_MSG:
-                        res = encoder.encode(eval(body, globs))
-                        out.write_byte(SUCC_MSG)
-                        out.write_string(res)
+                        evaluated = eval(body, globs)
+                        encoded = encoder.encode({"type" : SUCC_MSG, "body" : evaluated})
+                        conn.sendall(encoded.encode('utf-8') + b"\n")
+                        # out.write_byte(SUCC_MSG)
+                        # out.write_string(res)
                     elif type == ASSN_MSG:
                         varName = body["varName"]
                         value = body["value"]
                         globs[varName] = value
-                        out.write_byte(SUCC_MSG)
+                        conn.sendall(json.dumps({"type" : SUCC_MSG, "body" : ""}).encode('utf-8') + b"\n")
+                        # out.write_byte(SUCC_MSG)
                 except Exception as e:
-                    out.write_byte(ERR_MSG)
-                    out.write_string(str(e))
-                    out.write_string(traceback.format_exc())
+                    err_data = {"type" : ERR_MSG, "body" : {"message" : str(e), "cause" : traceback.format_exc()}}
+                    conn.sendall(encoder.encode(err_data).encode('utf-8') + b"\n")
+                    # out.write_byte(ERR_MSG)
+                    # out.write_string(str(e))
+                    # out.write_string(traceback.format_exc())
                 finally:
-                    out.flush()
+                    # out.flush()
                     flush()
 
             # while True:
