@@ -124,36 +124,41 @@ class FlexibleEncoder(json.JSONEncoder):
 def logo_responder():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        sock.bind(('localhost', 0))
+        p = 1337
+        # p = 1337 if 'manual' in sys.argv else 1336
+        sock.bind(('localhost', p))
         sock.listen(0)
         _, port = sock.getsockname()
         sys.stdout.write("{}\n".format(port))
         sys.stdout.flush()
         conn, addr = sock.accept()
         try:
-            inp = ConnectionReader(conn)
+            # inp = ConnectionReader(conn)
             out = ConnectionWriter(conn)
             encoder = FlexibleEncoder()
             globs = {}
-            while True:
-                msg_type = inp.read_byte()
+            print("got connection")
+            for line in conn.makefile():
                 try:
-                    if msg_type == STMT_MSG:
-                        code = inp.read_string()
-                        exec(code, globs)
+                    # print("new line:", line)
+                    decoded = json.loads(line)
+                    # print("new data:", decoded)
+
+                    type = decoded["type"]
+                    body = decoded["body"]
+
+                    if type == STMT_MSG:
+                        exec(body, globs)
                         out.write_byte(SUCC_MSG)
-                    elif msg_type == EXPR_MSG:
-                        code = inp.read_string()
-                        result = encoder.encode(eval(code, globs))
+                    elif type == EXPR_MSG:
+                        res = encoder.encode(eval(body, globs))
                         out.write_byte(SUCC_MSG)
-                        out.write_string(result)
-                    elif msg_type == ASSN_MSG:
-                        var = inp.read_string()
-                        val = json.loads(inp.read_string())
-                        globs[var] = val
+                        out.write_string(res)
+                    elif type == ASSN_MSG:
+                        varName = body["varName"]
+                        value = body["value"]
+                        globs[varName] = value
                         out.write_byte(SUCC_MSG)
-                    else:
-                        raise Exception('Unrecognized message type: {}'.format(msg_type))
                 except Exception as e:
                     out.write_byte(ERR_MSG)
                     out.write_string(str(e))
@@ -161,6 +166,34 @@ def logo_responder():
                 finally:
                     out.flush()
                     flush()
+
+            # while True:
+            #     # msg_type = inp.read_byte()
+            #     try:
+            #         print("line", conn.makefile().readline())
+            #         # if msg_type == STMT_MSG:
+            #         #     code = inp.read_string()
+            #         #     exec(code, globs)
+            #         #     out.write_byte(SUCC_MSG)
+            #         # elif msg_type == EXPR_MSG:
+            #         #     code = inp.read_string()
+            #         #     result = encoder.encode(eval(code, globs))
+            #         #     out.write_byte(SUCC_MSG)
+            #         #     out.write_string(result)
+            #         # elif msg_type == ASSN_MSG:
+            #         #     var = inp.read_string()
+            #         #     val = json.loads(inp.read_string())
+            #         #     globs[var] = val
+            #         #     out.write_byte(SUCC_MSG)
+            #         # else:
+            #         #     raise Exception('Unrecognized message type: {}'.format(msg_type))
+            #     except Exception as e:
+            #         out.write_byte(ERR_MSG)
+            #         out.write_string(str(e))
+            #         out.write_string(traceback.format_exc())
+            #     finally:
+            #         out.flush()
+            #         flush()
         finally:
             conn.close()
     finally:
