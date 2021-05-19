@@ -581,7 +581,7 @@ object Run extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n")).get.get
+    PythonExtension.pythonProcess.exec(args.map(_.getString).mkString("\n"))
 }
 
 object RunResult extends api.Reporter {
@@ -591,13 +591,13 @@ object RunResult extends api.Reporter {
   )
 
   override def report(args: Array[Argument], context: Context): AnyRef =
-    PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n")).get.get
+    PythonExtension.pythonProcess.eval(args.map(_.getString).mkString("\n"))
 }
 
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType, Syntax.ReadableType))
   override def perform(args: Array[Argument], context: Context): Unit =
-    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get).get.get
+    PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
 }
 
 

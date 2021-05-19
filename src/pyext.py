@@ -124,9 +124,10 @@ class FlexibleEncoder(json.JSONEncoder):
 def logo_responder():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        p = 1337
+        # p = 1337
         # p = 1337 if 'manual' in sys.argv else 1336
-        sock.bind(('localhost', p))
+        # sock.bind(('localhost', p))
+        sock.bind(('localhost', 0))
         sock.listen(0)
         _, port = sock.getsockname()
         sys.stdout.write("{}\n".format(port))
