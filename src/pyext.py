@@ -22,6 +22,7 @@ TYPE_SIZE = 1
 STMT_MSG = 0
 EXPR_MSG = 1
 ASSN_MSG = 2
+EXPR_STRINGIFIED_MSG = 3
 
 # Out
 
@@ -164,6 +165,10 @@ def logo_responder():
                         globs[varName] = value
                         conn.sendall(json.dumps({"type" : SUCC_MSG, "body" : ""}).encode('utf-8') + b"\n")
                         # out.write_byte(SUCC_MSG)
+                    elif type == EXPR_STRINGIFIED_MSG:
+                        evaluated = repr(eval(body, globs))
+                        encoded = encoder.encode({"type" : SUCC_MSG, "body" : evaluated})
+                        conn.sendall(encoded.encode('utf-8') + b"\n")
                 except Exception as e:
                     err_data = {"type" : ERR_MSG, "body" : {"message" : str(e), "cause" : traceback.format_exc()}}
                     conn.sendall(encoder.encode(err_data).encode('utf-8') + b"\n")
