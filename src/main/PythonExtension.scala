@@ -1,31 +1,19 @@
 package org.nlogo.extensions.py
 
-import java.awt.GraphicsEnvironment
-import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, Closeable, File, FileInputStream, FileOutputStream, IOException, InputStreamReader}
-import java.lang.ProcessBuilder.Redirect
-import java.lang.{Boolean => JavaBoolean, Double => JavaDouble}
-import java.net.{ServerSocket, Socket}
-import java.util.Properties
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import javax.swing.{JMenu, SwingUtilities}
 import com.fasterxml.jackson.core.JsonParser
-import org.json4s.JsonAST.{JArray, JBool, JDecimal, JDouble, JInt, JLong, JNothing, JNull, JObject, JSet, JString, JValue}
-import org.json4s.jackson.JsonMethods.{mapper, parse}
-import org.nlogo.api
-import org.nlogo.api.Exceptions.ignoring
-import org.nlogo.api.{Argument, Context, ExtensionException, ExtensionManager, FileIO, OutputDestination, Workspace}
-import org.nlogo.app.App
-import org.nlogo.core.{Dump, LogoList, Nobody, Syntax}
-import org.nlogo.nvm.HaltException
-import org.nlogo.workspace.AbstractWorkspace
-
-import scala.collection.JavaConverters._
-import scala.concurrent.SyncVar
-import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import org.json4s.jackson.JsonMethods.mapper
 import org.me.Subprocess
 import org.me.Subprocess.path
+import org.nlogo.api
+import org.nlogo.api._
+import org.nlogo.app.App
+import org.nlogo.core.{LogoList, Syntax}
+
+import java.awt.GraphicsEnvironment
+import java.io._
+import java.lang.ProcessBuilder.Redirect
+import java.util.Properties
+import javax.swing.JMenu
 
 object PythonExtension {
   private var _pythonProcess: Option[Subprocess] = None
