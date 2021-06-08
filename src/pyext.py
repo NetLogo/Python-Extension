@@ -73,7 +73,10 @@ def logo_responder():
                         globs[varName] = value
                         conn.sendall(json.dumps({"type" : SUCC_MSG, "body" : ""}).encode('utf-8') + b"\n")
                     elif type == EXPR_STRINGIFIED_MSG:
-                        evaluated = repr(eval(body, globs))
+                        if len(body.strip()) > 0:
+                            evaluated = repr(eval(body, globs))
+                        else:
+                            evaluated = ""
                         encoded = encoder.encode({"type" : SUCC_MSG, "body" : evaluated})
                         conn.sendall(encoded.encode('utf-8') + b"\n")
                 except Exception as e:

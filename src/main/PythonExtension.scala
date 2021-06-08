@@ -2,12 +2,13 @@ package org.nlogo.extensions.py
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.jackson.JsonMethods.mapper
-import org.me.Subprocess
+import org.me.{ShellWindow, Subprocess}
 import org.me.Subprocess.path
 import org.nlogo.api
 import org.nlogo.api._
 import org.nlogo.app.App
 import org.nlogo.core.{LogoList, Syntax}
+import org.nlogo.extensions.py.PythonExtension.shellWindow
 
 import java.awt.GraphicsEnvironment
 import java.io._
@@ -17,6 +18,7 @@ import javax.swing.JMenu
 
 object PythonExtension {
   private var _pythonProcess: Option[Subprocess] = None
+  var shellWindow = new ShellWindow()
 
   val extDirectory: File = new File(
     getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
@@ -171,6 +173,7 @@ class PythonExtension extends api.DefaultClassManager {
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
+    PythonExtension.shellWindow.setVisible(false)
     if (!PythonExtension.isHeadless) {
       pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
     }
@@ -187,6 +190,7 @@ object SetupPython extends api.Command {
     val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
     try {
       PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
+      PythonExtension.shellWindow.eval_stringified = Some(PythonExtension.pythonProcess.evalStringified)
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific

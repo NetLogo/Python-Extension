@@ -94,4 +94,7 @@ class PythonMenu extends JMenu("Python") {
   add("Configure").addActionListener{ _ =>
     new ConfigEditor(App.app.frame, PythonExtension.config).setVisible(true)
   }
+  add("Pop-out Interpreter").addActionListener{ _ =>
+    PythonExtension.shellWindow.setVisible(!PythonExtension.shellWindow.isVisible)
+  }
 }
