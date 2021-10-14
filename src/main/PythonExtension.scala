@@ -18,7 +18,7 @@ import javax.swing.JMenu
 
 object PythonExtension {
   private var _pythonProcess: Option[Subprocess] = None
-  var shellWindow = new ShellWindow()
+  var shellWindow : Option[ShellWindow] = None
 
   val extDirectory: File = new File(
     getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
@@ -161,6 +161,8 @@ class PythonExtension extends api.DefaultClassManager {
     mapper.configure(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
     if (!PythonExtension.isHeadless) {
+      PythonExtension.shellWindow = Some(new ShellWindow())
+
       val menuBar = App.app.frame.getJMenuBar
 
       menuBar.getComponents.collectFirst {
@@ -173,7 +175,7 @@ class PythonExtension extends api.DefaultClassManager {
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
-    PythonExtension.shellWindow.setVisible(false)
+    PythonExtension.shellWindow.foreach(sw => sw.setVisible(false))
     if (!PythonExtension.isHeadless) {
       pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
     }
@@ -190,7 +192,7 @@ object SetupPython extends api.Command {
     val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
     try {
       PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
-      PythonExtension.shellWindow.eval_stringified = Some(PythonExtension.pythonProcess.evalStringified)
+      PythonExtension.shellWindow.foreach(sw => sw.eval_stringified = Some(PythonExtension.pythonProcess.evalStringified))
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
