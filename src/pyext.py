@@ -98,11 +98,19 @@ def handle_assignment(conn, body, env_globals, encoder):
     conn.sendall(json.dumps({"type": SUCC_MSG, "body": ""}).encode('utf-8') + b"\n")
 
 def handle_expression_stringified(conn, body, env_globals, encoder):
+    representation = ""
     if len(body.strip()) > 0:
-        evaluated = repr(eval(body, env_globals))
-    else:
-        evaluated = ""
-    encoded = encoder.encode({"type": SUCC_MSG, "body": evaluated})
+        try:
+            compiled = compile(body, "<string>", 'eval')
+            evaluated = eval(compiled, env_globals)
+            if evaluated is not None:
+                representation = repr(evaluated)
+
+        except:
+            compiled = compile(body, "<string>", 'exec')
+            exec(compiled, env_globals)
+
+    encoded = encoder.encode({"type": SUCC_MSG, "body": representation})
     conn.sendall(encoded.encode('utf-8') + b"\n")
 
 def handle_exception(conn, e, encoder):
