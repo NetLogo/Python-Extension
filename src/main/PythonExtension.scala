@@ -81,10 +81,10 @@ class PythonExtension extends api.DefaultClassManager {
       PythonExtension.shellWindow = Some(new ShellWindow())
 
       val menuBar = App.app.frame.getJMenuBar
-
-      menuBar.getComponents.collectFirst {
+      val maybeMenuItem = menuBar.getComponents.collectFirst{
         case mi: JMenu if mi.getText == PythonMenu.name => mi
-      }.getOrElse {
+      }
+      if (maybeMenuItem.isEmpty) {
         pyMenu = Option(menuBar.add(new PythonMenu))
       }
     }
@@ -185,7 +185,7 @@ object RunResult extends api.Reporter {
 
 object Set extends api.Command {
   override def getSyntax: Syntax = Syntax.commandSyntax(
-    right = List(Syntax.StringType, Syntax.ReadableType))
+    right = List(Syntax.StringType, Subprocess.convertibleTypesSyntax))
 
   override def perform(args: Array[Argument], context: Context): Unit =
     PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
