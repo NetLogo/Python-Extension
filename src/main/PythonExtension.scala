@@ -2,8 +2,8 @@ package org.nlogo.extensions.py
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.jackson.JsonMethods.mapper
-import org.me.Subprocess.path
-import org.me.{ShellWindow, Subprocess}
+import org.nlogo.langextension.Subprocess.path
+import org.nlogo.langextension.{ShellWindow, Subprocess}
 import org.nlogo.api
 import org.nlogo.api._
 import org.nlogo.app.App

@@ -27,7 +27,7 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warning
 
 libraryDependencies ++= Seq(
   "org.json4s"        %% "json4s-jackson" % "3.5.3",
-  "org.me" %% "netlogo-extension-language-server-library" % "0.1-SNAPSHOT",
+  "org.nlogo.langextension" %% "lang-extension-lib" % "0.1-SNAPSHOT",
   "com.typesafe"       % "config"         % "1.3.1"  % "test",
   "org.scalatest"     %% "scalatest"      % "3.0.0"  % "test",
   "org.picocontainer"  %  "picocontainer" % "2.13.6" % "test",
