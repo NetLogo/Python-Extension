@@ -133,7 +133,7 @@ object SetupPython extends api.Command {
     val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
     try {
       PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
-      PythonExtension.shellWindow.foreach(sw => sw.eval_stringified = Some(PythonExtension.pythonProcess.evalStringified))
+      PythonExtension.shellWindow.foreach(sw => sw.setEvalStringified(Some(PythonExtension.pythonProcess.evalStringified)))
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
