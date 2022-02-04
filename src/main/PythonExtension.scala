@@ -18,19 +18,21 @@ import javax.swing.JMenu
 object PythonExtension {
   private var _pythonProcess: Option[Subprocess] = None
   var shellWindow: Option[ShellWindow] = None
+  var pyMenu: Option[JMenu] = None
 
   val extDirectory: File = new File(
     getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
   ).getParentFile
 
   private val propertyFileName = "python.properties"
-  private val extCheckFile = new File(extDirectory, propertyFileName)
-  private val propertyFile = if (extCheckFile.exists) extCheckFile else new File(FileIO.perUserDir("py"), propertyFileName)
+  private val maybePropertyFileOnDisk = new File(extDirectory, propertyFileName)
+  private val propertyFile = if (maybePropertyFileOnDisk.exists) maybePropertyFileOnDisk else new File(FileIO.perUserDir("py"), propertyFileName)
   val config: PythonConfig = PythonConfig(propertyFile)
 
-  def pythonProcess: Subprocess =
+  def pythonProcess: Subprocess = {
     _pythonProcess.getOrElse(throw new ExtensionException(
       "Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
+  }
 
   def pythonProcess_=(proc: Subprocess): Unit = {
     _pythonProcess.foreach(_.close())
@@ -47,7 +49,6 @@ object PythonExtension {
 }
 
 class PythonExtension extends api.DefaultClassManager {
-  var pyMenu: Option[JMenu] = None
 
   override def load(manager: api.PrimitiveManager): Unit = {
     manager.addPrimitive("setup", SetupPython)
@@ -78,24 +79,32 @@ class PythonExtension extends api.DefaultClassManager {
     mapper.configure(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
     if (!PythonExtension.isHeadless) {
-      PythonExtension.shellWindow = Some(new ShellWindow())
+      setupGui()
+    }
+  }
 
-      val menuBar = App.app.frame.getJMenuBar
-      val maybeMenuItem = menuBar.getComponents.collectFirst{
-        case mi: JMenu if mi.getText == PythonMenu.name => mi
-      }
-      if (maybeMenuItem.isEmpty) {
-        pyMenu = Option(menuBar.add(new PythonMenu))
-      }
+  private def setupGui(): Unit = {
+    PythonExtension.shellWindow = Some(new ShellWindow())
+
+    val menuBar = App.app.frame.getJMenuBar
+    val maybeMenuItem = menuBar.getComponents.collectFirst {
+      case mi: JMenu if mi.getText == PythonMenu.name => mi
+    }
+    if (maybeMenuItem.isEmpty) {
+      PythonExtension.pyMenu = Option(menuBar.add(new PythonMenu))
     }
   }
 
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
+    teardownGui()
+  }
+
+  private def teardownGui(): Unit = {
     PythonExtension.shellWindow.foreach(sw => sw.setVisible(false))
     if (!PythonExtension.isHeadless) {
-      pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
+      PythonExtension.pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
     }
   }
 }
@@ -175,7 +184,7 @@ object Run extends api.Command {
 
 object RunResult extends api.Reporter {
   override def getSyntax: Syntax = Syntax.reporterSyntax(
-    right = List(Syntax.StringType | Syntax.RepeatableType),
+    right = List(Syntax.StringType),
     ret = Syntax.WildcardType
   )
 
