@@ -173,3 +173,34 @@ errors-on-infinity-python3
   extensions [ py ]
   O> py:setup py:python3
   py:runresult "float('inf')" => ERROR Extension exception: Python reported a number too large for NetLogo.
+
+turtle-serialization
+  extensions [ py ]
+  breed [goats goat]
+  goats-own [energy agent-var agentset-var ]
+  O> py:setup py:python3
+  O> create-goats 1 [ set heading 0 set color 75 ]
+  O> ask goat 0 [ set energy 42 ]
+  O> py:set "goat" goat 0
+  py:runresult "str(goat)" => "{'WHO': 0, 'COLOR': 75, 'HEADING': 0, 'XCOR': 0, 'YCOR': 0, 'SHAPE': 'default', 'LABEL': '', 'LABEL-COLOR': 9.9, 'BREED': 'GOATS', 'HIDDEN?': False, 'SIZE': 1, 'PEN-SIZE': 1, 'PEN-MODE': 'up', 'ENERGY': 42, 'AGENT-VAR': 0, 'AGENTSET-VAR': 0}"
+
+turtle-re-serialization
+  extensions [ py ]
+  breed [goats goat]
+  goats-own [energy agent-var agentset-var ]
+  O> py:setup py:python3
+  O> create-goats 1 [ set heading 0 set color 75 ]
+  O> ask goat 0 [ set energy 42 ]
+  O> py:set "goat" goat 0
+  py:runresult "goat" => [["WHO" 0] ["COLOR" 75] ["HEADING" 0] ["XCOR" 0] ["YCOR" 0] ["SHAPE" "default"] ["LABEL" ""] ["LABEL-COLOR" 9.9] ["BREED" "GOATS"] ["HIDDEN?" false] ["SIZE" 1] ["PEN-SIZE" 1] ["PEN-MODE" "up"] ["ENERGY" 42] ["AGENT-VAR" 0] ["AGENTSET-VAR" 0]]
+
+turtle-re-serialization-agent-and-agentset-variables
+  extensions [ py ]
+  breed [goats goat]
+  goats-own [energy agent-var agentset-var ]
+  O> py:setup py:python3
+  O> create-goats 2 [ set heading 0 set color 75 ]
+  O> ask goat 0 [ set agent-var goat 1 ]
+  O> ask goat 0 [ set agentset-var goats ]
+  O> py:set "goat" goat 0
+  py:runresult "goat" => [["WHO" 0] ["COLOR" 75] ["HEADING" 0] ["XCOR" 0] ["YCOR" 0] ["SHAPE" "default"] ["LABEL" ""] ["LABEL-COLOR" 9.9] ["BREED" "GOATS"] ["HIDDEN?" false] ["SIZE" 1] ["PEN-SIZE" 1] ["PEN-MODE" "up"] ["ENERGY" 0] ["AGENT-VAR" "goat 1"] ["AGENTSET-VAR" "GOATS"]]

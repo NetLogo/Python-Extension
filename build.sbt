@@ -3,6 +3,7 @@ enablePlugins(org.nlogo.build.NetLogoExtension)
 enablePlugins(org.nlogo.build.ExtensionDocumentationPlugin)
 
 resolvers      += "netlogo" at "https://dl.cloudsmith.io/public/netlogo/netlogo/maven/"
+resolvers      += "netlogo-lang-extension" at "https://dl.cloudsmith.io/public/netlogo/netlogoextensionlanguageserverlibrary/maven"
 netLogoVersion := "6.2.0-d27b502"
 
 netLogoClassManager := "org.nlogo.extensions.py.PythonExtension"
@@ -26,11 +27,12 @@ scalaSource in Compile := baseDirectory.value / "src" / "main"
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings")
 
 libraryDependencies ++= Seq(
-  "org.json4s"        %% "json4s-jackson" % "3.5.3",
-  "com.typesafe"       % "config"         % "1.3.1"  % "test",
-  "org.scalatest"     %% "scalatest"      % "3.0.0"  % "test",
-  "org.picocontainer"  %  "picocontainer" % "2.13.6" % "test",
-  "org.ow2.asm"        %  "asm-all"       % "5.0.3"  % "test"
+  "org.json4s"              %% "json4s-jackson"      % "3.5.3",
+  "org.nlogo.langextension" %% "lang-extension-lib"  % "0.3",
+  "com.typesafe"            % "config"               % "1.3.1"  % "test",
+  "org.scalatest"           %% "scalatest"           % "3.0.0"  % "test",
+  "org.picocontainer"       %  "picocontainer"       % "2.13.6" % "test",
+  "org.ow2.asm"             %  "asm-all"             % "5.0.3"  % "test"
 )
 
 netLogoPackageExtras += (baseDirectory(_ / "src" / "pyext.py").value, "pyext.py")

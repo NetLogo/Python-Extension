@@ -235,11 +235,25 @@ py:set variable-name value
 ```
 
 
-Sets a variable in the Python session with the given name to the given NetLogo value. NetLogo objects will be converted to Python objects as expected. `value` should only be a number, string, boolean, list, or nobody (agents and extension objects are currently converted to strings).
+Sets a variable in the Python session with the given name to the given NetLogo value. NetLogo objects will be converted to Python objects as expected.
 
 ```NetLogo
 py:set "x" [1 2 3]
 show py:runresult "x" ;; Shows [1 2 3]
 ```
+
+Agents are converted into dictionaries with elements for each agent variable. Agentsets are converted into lists of agent dictionaries.
+
+```NetLogo
+breed [goats goat]
+goats-own [energy ]
+create-goats 1 [ set heading 0 set color 75 ]
+ask goat 0 [ set energy 42 ]
+py:set "goat" goat 0
+py:runresult "str(goat)" ;; Should output: "{'WHO': 0, 'COLOR': 75, 'HEADING': 0, 'XCOR': 0, 'YCOR': 0, 'SHAPE': 'default', 'LABEL': '', 'LABEL-COLOR': 9.9, 'BREED': 'GOATS', 'HIDDEN?': False, 'SIZE': 1, 'PEN-SIZE': 1, 'PEN-MODE': 'up', 'ENERGY': 42}"
+```
+
+Agents with variables containing references to agentsets will have those variables converted into the string representation of that agentset.
+
 
 
