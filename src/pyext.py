@@ -109,7 +109,7 @@ def handle_expression_stringified(conn, body, env_globals, encoder):
 
 
 def handle_exception(conn, e, encoder):
-    err_data = {"type": ERR_MSG, "body": {"message": str(e), "cause": traceback.format_exc()}}
+    err_data = {"type": ERR_MSG, "body": {"message": str(e), "longMessage": traceback.format_exc()}}
     conn.sendall(encoder.encode(err_data).encode('utf-8') + b"\n")
 
 
