@@ -96,9 +96,12 @@ def handle_expression_stringified(conn, body, env_globals, encoder):
             compiled = compile(body, "<string>", 'eval')
             evaluated = eval(compiled, env_globals)
             if evaluated is not None:
-                representation = repr(evaluated)
+                if isinstance(evaluated, str):
+                    representation = evaluated
+                else:
+                    representation = repr(evaluated)
 
-        except:
+        except SyntaxError as e:
             exec(body, env_globals)
 
     encoded = encoder.encode({"type": SUCC_MSG, "body": representation})
