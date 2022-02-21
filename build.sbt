@@ -4,7 +4,7 @@ enablePlugins(org.nlogo.build.ExtensionDocumentationPlugin)
 
 resolvers      += "netlogo" at "https://dl.cloudsmith.io/public/netlogo/netlogo/maven/"
 resolvers      += "netlogo-lang-extension" at "https://dl.cloudsmith.io/public/netlogo/netlogoextensionlanguageserverlibrary/maven"
-netLogoVersion := "6.2.0-d27b502"
+netLogoVersion := "6.2.2"
 
 netLogoClassManager := "org.nlogo.extensions.py.PythonExtension"
 
@@ -27,12 +27,14 @@ scalaSource in Compile := baseDirectory.value / "src" / "main"
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings")
 
 libraryDependencies ++= Seq(
-  "org.json4s"              %% "json4s-jackson"      % "3.5.3",
-  "org.nlogo.langextension" %% "lang-extension-lib"  % "0.3",
-  "com.typesafe"            % "config"               % "1.3.1"  % "test",
-  "org.scalatest"           %% "scalatest"           % "3.0.0"  % "test",
-  "org.picocontainer"       %  "picocontainer"       % "2.13.6" % "test",
-  "org.ow2.asm"             %  "asm-all"             % "5.0.3"  % "test"
+  "org.json4s"              %% "json4s-jackson"     % "3.5.3",
+  "org.nlogo.langextension" %% "lang-extension-lib" % "0.3",
+  "com.typesafe"            % "config"              % "1.3.1"  % "test",
+  "org.scalatest"           %% "scalatest"          % "3.2.10" % "test",
+  "org.picocontainer"       %  "picocontainer"      % "2.13.6" % "test",
+  "org.ow2.asm"             %  "asm-all"            % "5.0.3"  % "test",
+  "org.jogamp.jogl"         % "jogl-all"            % "2.4.0"  % "test" from "https://jogamp.org/deployment/archive/rc/v2.4.0-rc-20210111/jar/jogl-all.jar",
+  "org.jogamp.gluegen"      % "gluegen-rt"          % "2.4.0"  % "test" from "https://jogamp.org/deployment/archive/rc/v2.4.0-rc-20210111/jar/gluegen-rt.jar",
 )
 
 netLogoPackageExtras += (baseDirectory(_ / "src" / "pyext.py").value, "pyext.py")
