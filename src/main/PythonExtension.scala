@@ -138,8 +138,10 @@ object SetupPython extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit = {
-    val pythonCmd = args.map(_.getString)
-    val pyScript: String = new File(PythonExtension.extDirectory, "pyext.py").toString
+    val pythonCmd   = args.map(_.getString)
+    val maybePyFile = new File(PythonExtension.extDirectory, "pyext.py")
+    val pyFile      = if (maybePyFile.exists) { maybePyFile } else { (new File("pyext.py")).getCanonicalFile }
+    val pyScript: String = pyFile.toString
     try {
       PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
       PythonExtension.shellWindow.foreach(sw => sw.setEvalStringified(Some(PythonExtension.pythonProcess.evalStringified)))

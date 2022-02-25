@@ -6,3 +6,4 @@ target/
 /pyext.py
 py.zip
 py-demo-models.zip
+.bundledFiles

@@ -2,8 +2,14 @@
 
 package org.nlogo.extensions.py
 
+import java.io.File
 import org.nlogo.headless.TestLanguage
 
-class Tests extends TestLanguage(Seq(new java.io.File("tests.txt").getCanonicalFile)) {
+object Tests {
+  val testFileNames = Seq("tests.txt")
+  val testFiles     = testFileNames.map( (f) => (new File(f)).getCanonicalFile )
+}
+
+class Tests extends TestLanguage(Tests.testFiles) {
   System.setProperty("org.nlogo.preferHeadless", "true")
 }
