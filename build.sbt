@@ -4,7 +4,7 @@ enablePlugins(NetLogoExtension)
 
 enablePlugins(ExtensionDocumentationPlugin)
 
-version    := "0.4.4"
+version    := "0.5.0"
 isSnapshot := true
 
 scalaVersion           := "2.12.12"
