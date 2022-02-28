@@ -271,13 +271,21 @@ object PythonBinary {
       Option(new BufferedReader(new InputStreamReader(proc.getInputStream)).readLine()).orElse(
         Option(new BufferedReader(new InputStreamReader(proc.getErrorStream)).readLine())
       ).flatMap { verString =>
-        val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(verString)
-        if (m.groupCount == 3) Some(PythonBinary(f, (m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)))
-        else None
+        parsePythonVersion(verString).map({ case (version) => PythonBinary(f, version) })
       }
     } catch {
       case _: IOException => None
+      case _: IllegalStateException => None
       case _: SecurityException => None
+    }
+  }
+
+  def parsePythonVersion(v: String): Option[(Int, Int, Int)] = {
+    val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(v)
+    if (m.groupCount == 3) {
+      Some(m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)
+    } else {
+      None
     }
   }
 }
