@@ -1,7 +1,6 @@
 import org.nlogo.build.{ NetLogoExtension, ExtensionDocumentationPlugin }
 
 enablePlugins(NetLogoExtension)
-
 enablePlugins(ExtensionDocumentationPlugin)
 
 version    := "0.5.0"
@@ -15,12 +14,9 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warning
 netLogoVersion       := "6.2.2"
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoExtName       := "py"
-netLogoZipSources    := false
-netLogoTarget        := NetLogoExtension.directoryTarget(baseDirectory.value)
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
 resolvers           += "netlogo-lang-extension" at "https://dl.cloudsmith.io/public/netlogo/netlogoextensionlanguageserverlibrary/maven"
 libraryDependencies ++= Seq(
-  "org.json4s"              %% "json4s-jackson"     % "3.5.3",
   "org.nlogo.langextension" %% "lang-extension-lib" % "0.3"
 )
