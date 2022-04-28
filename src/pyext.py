@@ -14,15 +14,17 @@ else:
 import traceback
 
 # In
+QUIT_MSG = -1
 STMT_MSG = 0
 EXPR_MSG = 1
 ASSN_MSG = 2
 EXPR_STRINGIFIED_MSG = 3
+HEARTBEAT_REQUEST = 4
 
 # Out
 SUCC_MSG = 0
 ERR_MSG = 1
-
+HEARTBEAT_RESPONSE = 4
 
 def start_server():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,16 +35,22 @@ def start_server():
             env_globals = {}
             for line in conn.makefile():
                 try:
-                    type, body = parse(line)
+                    decoded = json.loads(line)
+                    type = decoded["type"]
 
-                    if type == STMT_MSG:
-                        handle_statement(conn, body, env_globals, encoder)
+                    if type == QUIT_MSG:
+                        conn.sendall(json.dumps({"type": SUCC_MSG}).encode('utf-8') + b"\n")
+                        break
+                    elif type == STMT_MSG:
+                        handle_statement(conn, decoded["body"], env_globals, encoder)
                     elif type == EXPR_MSG:
-                        handle_expression(conn, body, env_globals, encoder)
+                        handle_expression(conn, decoded["body"], env_globals, encoder)
                     elif type == ASSN_MSG:
-                        handle_assignment(conn, body, env_globals, encoder)
+                        handle_assignment(conn, decoded["body"], env_globals, encoder)
                     elif type == EXPR_STRINGIFIED_MSG:
-                        handle_expression_stringified(conn, body, env_globals, encoder)
+                        handle_expression_stringified(conn, decoded["body"], env_globals, encoder)
+                    elif type == HEARTBEAT_REQUEST:
+                        handle_heartbeat(conn)
                 except Exception as e:
                     handle_exception(conn, e, encoder)
                 finally:
@@ -61,18 +69,12 @@ def make_connection(sock):
     conn, addr = sock.accept()
     return conn
 
-
-def parse(line):
-    decoded = json.loads(line)
-    type = decoded["type"]
-    body = decoded["body"]
-    return type, body
-
+def handle_heartbeat(conn):
+    conn.sendall(json.dumps({"type": HEARTBEAT_RESPONSE}).encode('utf-8') + b"\n")
 
 def handle_statement(conn, body, env_globals, encoder):
     exec(body, env_globals)
     conn.sendall(json.dumps({"type": SUCC_MSG, "body": ""}).encode('utf-8') + b"\n")
-
 
 def handle_expression(conn, body, env_globals, encoder):
     evaluated = eval(body, env_globals)
