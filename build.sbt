@@ -1,7 +1,6 @@
 import org.nlogo.build.{ NetLogoExtension, ExtensionDocumentationPlugin }
 
-enablePlugins(NetLogoExtension)
-enablePlugins(ExtensionDocumentationPlugin)
+enablePlugins(NetLogoExtension, ExtensionDocumentationPlugin)
 
 version    := "0.5.0"
 isSnapshot := true

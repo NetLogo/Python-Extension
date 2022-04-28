@@ -1,9 +1,8 @@
-.git/
-extensions/
-py/
-target/
-*.jar
-/pyext.py
-py.zip
-py-demo-models.zip
 .bundledFiles
+target/
+extensions/
+/*.jar
+/*.zip
+
+py/
+/pyext.py
