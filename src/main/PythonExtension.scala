@@ -210,7 +210,7 @@ case class FindPython(pyFinder: () => Option[File],
       if (PythonExtension.isHeadless)
         None
       else {
-        throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the configuration menu.")
+        throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the Python > Configure menu.")
       }
     ).getOrElse {
       throw new ExtensionException("Couldn't find Python 2. Try specifying an exact path or configuring a default Python 2.")

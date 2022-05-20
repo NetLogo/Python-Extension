@@ -1,12 +1,12 @@
 package org.nlogo.extensions.py
 
-import java.awt.{BorderLayout, FileDialog, GridBagLayout, Insets, GridBagConstraints => GBC}
+import java.awt.{ BorderLayout, FileDialog, GridBagLayout, Insets, GridBagConstraints => GBC }
 import java.io.File
-import javax.swing.{BorderFactory, JButton, JDialog, JFrame, JLabel, JMenu, JPanel, JTextField}
+import javax.swing.{ BorderFactory, JButton, JDialog, JFrame, JLabel, JMenu, JPanel, JTextField }
 
 import org.nlogo.app.App
 import org.nlogo.core.I18N
-import org.nlogo.swing.{ButtonPanel, RichAction, RichJButton, Utils}
+import org.nlogo.swing.{ ButtonPanel, RichAction, RichJButton, Utils }
 
 class ConfigEditor(owner: JFrame, config: PythonConfig) extends JDialog(owner, "Python configuration") {
   private val python2TextField = new JTextField(config.python2.getOrElse(""), 20)
