@@ -56,20 +56,13 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("runresult", RunResult)
     manager.addPrimitive("set", Set)
     manager.addPrimitive("python2",
-      FindPython(
-        PythonSubprocess.python2 _,
-        PythonExtension.config.python2 _)
+      FindPython(PythonSubprocess.python2 _)
     )
     manager.addPrimitive("python3",
-      FindPython(
-        PythonSubprocess.python3 _,
-        PythonExtension.config.python3 _)
+      FindPython(PythonSubprocess.python3 _)
     )
     manager.addPrimitive("python",
-      FindPython(
-        PythonSubprocess.anyPython _,
-        () => PythonExtension.config.python3 orElse PythonExtension.config.python2
-      )
+      FindPython(PythonSubprocess.anyPython _)
     )
     manager.addPrimitive("__path", Path)
   }
@@ -202,19 +195,12 @@ object Set extends api.Command {
     PythonExtension.pythonProcess.assign(args(0).getString, args(1).get)
 }
 
-case class FindPython(pyFinder: () => Option[File],
-                      getConfig: () => Option[String]) extends api.Reporter {
+case class FindPython(pyFinder: () => Option[File]) extends api.Reporter {
 
   override def report(args: Array[Argument], context: Context): String =
-    pyFinder().map(_.getAbsolutePath).orElse(
-      if (PythonExtension.isHeadless)
-        None
-      else {
-        throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the Python > Configure menu.")
-      }
-    ).getOrElse {
-      throw new ExtensionException("Couldn't find Python 2. Try specifying an exact path or configuring a default Python 2.")
-    }
+    pyFinder().map(_.getAbsolutePath).getOrElse(
+      throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the Python > Configure menu.\n")
+    )
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.StringType)
 }
