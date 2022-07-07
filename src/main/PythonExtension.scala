@@ -19,7 +19,7 @@ import org.nlogo.core.{ LogoList, Syntax }
 object PythonExtension {
   val codeName   = "py"
   val longName   = "Python"
-  val extLangBin = "python"
+  val extLangBin = if (Platform.isWindows) { "python" } else { "python3" }
 
   private var _pythonProcess: Option[Subprocess] = None
   var shellWindow: Option[ShellWindow] = None
@@ -93,7 +93,7 @@ object Using {
 object PythonSubprocess {
   def python2: Option[File] = {
     val maybePy2File = PythonExtension.config.get("python2").map( (dir) => {
-      val bin  = if (Platform.isWindows) { "python.exe" } else { "python" }
+      val bin  = if (Platform.isWindows) { "python.exe" } else { "python2" }
       val path = Paths.get(dir, bin)
       new File(path.toString)
     })
@@ -191,7 +191,7 @@ object Set extends api.Command {
 case class FindPython(pyFinder: () => Option[File]) extends api.Reporter {
 
   override def report(args: Array[Argument], context: Context): String =
-    pyFinder().map(_.getAbsolutePath).getOrElse(
+    pyFinder().map(_.toString).getOrElse(
       throw new ExtensionException("Couldn't find an appropriate version of Python. Please set the path to your Python executable in the Python > Configure menu.\n")
     )
 
