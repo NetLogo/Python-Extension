@@ -17,5 +17,5 @@ netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
 resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
-  "org.nlogo.languagelibrary" %% "language-library" % "1.0.0"
+  "org.nlogo.languagelibrary" %% "language-library" % "1.1.0"
 )

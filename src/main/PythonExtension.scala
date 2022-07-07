@@ -1,33 +1,34 @@
 package org.nlogo.extensions.py
 
-import com.fasterxml.jackson.core.JsonParser
-import org.json4s.jackson.JsonMethods.mapper
-import org.nlogo.languagelibrary.Subprocess.path
-import org.nlogo.languagelibrary.{ShellWindow, Subprocess}
-import org.nlogo.api
-import org.nlogo.api._
-import org.nlogo.app.App
-import org.nlogo.core.{LogoList, Syntax}
-
 import java.awt.GraphicsEnvironment
-import java.io._
+import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader }
 import java.lang.ProcessBuilder.Redirect
+import java.nio.file.Paths
 import java.util.Properties
 import javax.swing.JMenu
 
+import com.fasterxml.jackson.core.JsonParser
+import org.json4s.jackson.JsonMethods.mapper
+
+import org.nlogo.languagelibrary.Subprocess.path
+import org.nlogo.languagelibrary.{ ShellWindow, Subprocess }
+import org.nlogo.languagelibrary.config.{ Config, FileProperty, Menu, Platform }
+
+import org.nlogo.api
+import org.nlogo.api._
+import org.nlogo.app.App
+import org.nlogo.core.{ LogoList, Syntax }
+
 object PythonExtension {
+  val codeName   = "py"
+  val longName   = "Python Extension"
+  val extLangBin = "python"
+
   private var _pythonProcess: Option[Subprocess] = None
   var shellWindow: Option[ShellWindow] = None
-  var pyMenu: Option[JMenu] = None
 
-  val extDirectory: File = new File(
-    getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader].getURLs()(0).toURI.getPath
-  ).getParentFile
-
-  private val propertyFileName = "python.properties"
-  private val maybePropertyFileOnDisk = new File(extDirectory, propertyFileName)
-  private val propertyFile = if (maybePropertyFileOnDisk.exists) maybePropertyFileOnDisk else new File(FileIO.perUserDir("py"), propertyFileName)
-  val config: PythonConfig = PythonConfig(propertyFile)
+  var menu: Option[Menu] = None
+  val config: Config     = Config.createForPropertyFile(classOf[PythonExtension], PythonExtension.codeName)
 
   def pythonProcess: Subprocess = {
     _pythonProcess.getOrElse(throw new ExtensionException(
@@ -71,35 +72,17 @@ class PythonExtension extends api.DefaultClassManager {
     super.runOnce(em)
     mapper.configure(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
-    if (!PythonExtension.isHeadless) {
-      setupGui()
-    }
-  }
-
-  private def setupGui(): Unit = {
-    PythonExtension.shellWindow = Some(new ShellWindow())
-
-    val menuBar = App.app.frame.getJMenuBar
-    val maybeMenuItem = menuBar.getComponents.collectFirst {
-      case mi: JMenu if mi.getText == PythonMenu.name => mi
-    }
-    if (maybeMenuItem.isEmpty) {
-      PythonExtension.pyMenu = Option(menuBar.add(new PythonMenu))
-    }
+    val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
+    val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
+    PythonExtension.menu = Menu.create(PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
   }
 
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
-    teardownGui()
+    PythonExtension.menu.foreach(_.unload())
   }
 
-  private def teardownGui(): Unit = {
-    PythonExtension.shellWindow.foreach(sw => sw.setVisible(false))
-    if (!PythonExtension.isHeadless) {
-      PythonExtension.pyMenu.foreach(App.app.frame.getJMenuBar.remove _)
-    }
-  }
 }
 
 object Using {
@@ -111,11 +94,23 @@ object Using {
 }
 
 object PythonSubprocess {
-  def python2: Option[File] =
-    PythonExtension.config.python2.map(new File(_)).orElse(pythons.find(_.version._1 == 2).map(_.file))
+  def python2: Option[File] = {
+    val maybePy2File = PythonExtension.config.get("python2").map( (dir) => {
+      val bin  = if (Platform.isWindows) { "python.exe" } else { "python" }
+      val path = Paths.get(dir, bin)
+      new File(path.toString)
+    })
+    maybePy2File.orElse(pythons.find(_.version._1 == 2).map(_.file))
+  }
 
-  def python3: Option[File] =
-    PythonExtension.config.python3.map(new File(_)).orElse(pythons.find(_.version._1 == 3).map(_.file))
+  def python3: Option[File] = {
+    val maybePythonRuntimeFile = Config.getRuntimePath(
+        PythonExtension.extLangBin
+      , PythonExtension.config.runtimePath.getOrElse("")
+      , "--version"
+    ).map(new File(_))
+    maybePythonRuntimeFile.orElse(pythons.find(_.version._1 == 3).map(_.file))
+  }
 
   def anyPython: Option[File] = python3 orElse python2
 
@@ -131,13 +126,14 @@ object SetupPython extends api.Command {
   )
 
   override def perform(args: Array[Argument], context: Context): Unit = {
-    val pythonCmd   = args.map(_.getString)
-    val maybePyFile = new File(PythonExtension.extDirectory, "pyext.py")
-    val pyFile      = if (maybePyFile.exists) { maybePyFile } else { (new File("pyext.py")).getCanonicalFile }
-    val pyScript: String = pyFile.toString
+    val pyExtensionDirectory = Config.getExtensionRuntimeDirectory(classOf[PythonExtension], PythonExtension.codeName)
+    val pythonCmd            = args.map(_.getString)
+    val maybePyFile          = new File(pyExtensionDirectory, "pyext.py")
+    val pyFile               = if (maybePyFile.exists) { maybePyFile } else { (new File("pyext.py")).getCanonicalFile }
+    val pyScript: String     = pyFile.toString
     try {
-      PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), "py", "Python")
-      PythonExtension.shellWindow.foreach(sw => sw.setEvalStringified(Some(PythonExtension.pythonProcess.evalStringified)))
+      PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), PythonExtension.codeName, PythonExtension.longName)
+      PythonExtension.menu.foreach(_.setup(PythonExtension.pythonProcess.evalStringified))
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
@@ -210,37 +206,6 @@ object Path extends api.Reporter {
     LogoList.fromVector(Subprocess.path.flatMap(_.listFiles.filter(_.getName.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??"))).map(_.getAbsolutePath).toVector)
 
   override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-}
-
-case class PythonConfig(configFile: File) {
-  val py2Key: String = "python2"
-  val py3Key: String = "python3"
-
-  def properties: Option[Properties] = if (configFile.exists) {
-    Using(new FileInputStream(configFile)) { f =>
-      val props = new Properties
-      props.load(f)
-      Some(props)
-    }
-  } else None
-
-  def setProperty(key: String, value: String): Unit = {
-    val props = properties.getOrElse(new Properties)
-    props.setProperty(key, value)
-    Using(new FileOutputStream(configFile)) { f =>
-      props.store(f, "")
-    }
-  }
-
-  def python2: Option[String] =
-    properties.flatMap(p => Option(p.getProperty(py2Key))).flatMap(p => if (p.trim.isEmpty) None else Some(p))
-
-  def python2_=(p: String): Unit = setProperty(py2Key, p)
-
-  def python3: Option[String] =
-    properties.flatMap(p => Option(p.getProperty(py3Key))).flatMap(p => if (p.trim.isEmpty) None else Some(p))
-
-  def python3_=(p: String): Unit = setProperty(py3Key, p)
 }
 
 case class PythonBinary(file: File, version: (Int, Int, Int))
