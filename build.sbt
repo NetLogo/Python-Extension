@@ -15,6 +15,12 @@ netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoExtName       := "py"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
+Compile / packageBin / artifactPath := {
+  val oldPath = (Compile / packageBin / artifactPath).value.toPath
+  val newPath = oldPath.getParent / s"${netLogoExtName.value}.jar"
+  newPath.toFile
+}
+
 resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
   "org.nlogo.languagelibrary" %% "language-library" % "1.1.0"

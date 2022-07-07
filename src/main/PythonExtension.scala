@@ -18,7 +18,7 @@ import org.nlogo.core.{ LogoList, Syntax }
 
 object PythonExtension {
   val codeName   = "py"
-  val longName   = "Python Extension"
+  val longName   = "Python"
   val extLangBin = "python"
 
   private var _pythonProcess: Option[Subprocess] = None
