@@ -15,7 +15,7 @@ netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoExtName       := "py"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
-resolvers           += "netlogo-lang-extension" at "https://dl.cloudsmith.io/public/netlogo/netlogoextensionlanguageserverlibrary/maven"
+resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
-  "org.nlogo.langextension" %% "lang-extension-lib" % "0.4.1"
+  "org.nlogo.languagelibrary" %% "language-library" % "1.0.0"
 )
