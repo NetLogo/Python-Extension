@@ -4,8 +4,6 @@ import java.awt.GraphicsEnvironment
 import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader }
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Paths
-import java.util.Properties
-import javax.swing.JMenu
 
 import com.fasterxml.jackson.core.JsonParser
 import org.json4s.jackson.JsonMethods.mapper
@@ -16,7 +14,6 @@ import org.nlogo.languagelibrary.config.{ Config, FileProperty, Menu, Platform }
 
 import org.nlogo.api
 import org.nlogo.api._
-import org.nlogo.app.App
 import org.nlogo.core.{ LogoList, Syntax }
 
 object PythonExtension {
@@ -234,7 +231,7 @@ object PythonBinary {
   def parsePythonVersion(v: String): Option[(Int, Int, Int)] = {
     val m = """Python (\d+)\.(\d+)\.(\d+)""".r.findAllIn(v)
     if (m.groupCount == 3) {
-      Some(m.group(1).toInt, m.group(2).toInt, m.group(3).toInt)
+      Some((m.group(1).toInt, m.group(2).toInt, m.group(3).toInt))
     } else {
       None
     }

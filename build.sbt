@@ -8,7 +8,7 @@ isSnapshot := true
 scalaVersion           := "2.12.12"
 scalaSource in Test    := baseDirectory.value / "src" / "test"
 scalaSource in Compile := baseDirectory.value / "src" / "main"
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings", "-Xlint")
 
 netLogoVersion       := "6.2.2"
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
