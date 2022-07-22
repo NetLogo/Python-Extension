@@ -1,6 +1,5 @@
 package org.nlogo.extensions.py
 
-import java.awt.GraphicsEnvironment
 import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader }
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Paths
@@ -9,7 +8,7 @@ import com.fasterxml.jackson.core.JsonParser
 import org.json4s.jackson.JsonMethods.mapper
 
 import org.nlogo.languagelibrary.Subprocess.path
-import org.nlogo.languagelibrary.{ ShellWindow, Subprocess }
+import org.nlogo.languagelibrary.Subprocess
 import org.nlogo.languagelibrary.config.{ Config, FileProperty, Menu, Platform }
 
 import org.nlogo.api
@@ -22,7 +21,6 @@ object PythonExtension {
   val extLangBin = if (Platform.isWindows) { "python" } else { "python3" }
 
   private var _pythonProcess: Option[Subprocess] = None
-  var shellWindow: Option[ShellWindow] = None
 
   var menu: Option[Menu] = None
   val config: Config     = Config.createForPropertyFile(classOf[PythonExtension], PythonExtension.codeName)
@@ -41,8 +39,6 @@ object PythonExtension {
     _pythonProcess.foreach(_.close())
     _pythonProcess = None
   }
-
-  def isHeadless: Boolean = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
 
 }
 
@@ -71,7 +67,7 @@ class PythonExtension extends api.DefaultClassManager {
 
     val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
     val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
-    PythonExtension.menu = Menu.create(PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
+    PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
   }
 
   override def unload(em: ExtensionManager): Unit = {
