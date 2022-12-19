@@ -2,29 +2,30 @@ name: build-and-test
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 env:
-  LIBERICA_URL: https://download.bell-sw.com/java/17.0.3+7/bellsoft-jdk17.0.3+7-linux-amd64-full.tar.gz
+  LIBERICA_URL: https://download.bell-sw.com/java/17.0.5+8/bellsoft-jdk17.0.5+8-linux-amd64-full.tar.gz
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - uses: olafurpg/setup-scala@v10
+      - uses: olafurpg/setup-scala@v13
         with:
           java-version: liberica@17=tgz+${{ env.LIBERICA_URL }}
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.x'
 
-      - name: Install Python Libraries
+      - name: Install Python 3 libraries
+        run: pip3 install numpy sklearn
+      - name: Install Python 2 and Python 2 libraries
         run: |
-          pip3 install numpy
-          pip3 install sklearn
           sudo apt-get install python2
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
           python2 get-pip.py
