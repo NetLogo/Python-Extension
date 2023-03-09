@@ -23,7 +23,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install Python 3 libraries
-        run: pip3 install numpy sklearn
+        run: pip3 install numpy scikit-learn
       - name: Install Python 2 and Python 2 libraries
         run: |
           sudo apt-get install python2
