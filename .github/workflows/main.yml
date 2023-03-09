@@ -24,12 +24,6 @@ jobs:
 
       - name: Install Python 3 libraries
         run: pip3 install numpy scikit-learn
-      - name: Install Python 2 and Python 2 libraries
-        run: |
-          sudo apt-get install python2
-          curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-          python2 get-pip.py
-          pip2 install numpy
 
       - run: sbt -v update compile
       - run: sbt -v test

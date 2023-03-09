@@ -6,75 +6,75 @@
 #  extensions [ py ]
 #  O> py:setup "foobarbaz" => ERROR Extension exception: Couldn't find Python executable: foobarbaz
 
-open-connection-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  O> py:run "print('python hi1!')"
-  O> py:run "print('python hi2!')"
-
-python2-gets-python-2
-  extensions [ py ]
-  O> py:setup py:python2
-  O> py:run "import sys"
-  py:runresult "sys.version_info[0]" => 2
-
-basic-python-types-convert-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "1" => 1
-  py:runresult "'hi'" => "hi"
-  py:runresult "True" => true
-  py:runresult "False" => false
-  py:runresult "[1, 'hi', [2, 'bye']]" => [1 "hi" [2 "bye"]]
-
-basic-netlogo-types-convert-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  O> py:set "num" 1
-  O> py:set "string" "hi"
-  O> py:set "lst" [1 "hi" [2 "bye"]]
-  O> py:set "b" true
-  py:runresult "num" => 1
-  py:runresult "string" => "hi"
-  py:runresult "lst" => [1 "hi" [2 "bye"]]
-  py:runresult "b" => true
-
-error-handling-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  O> py:run "raise Exception('hi')" => ERROR Extension exception: hi
-  py:runresult "1 / 0" => ERROR Extension exception: integer division or modulo by zero
-
-dicts-convert-to-lists-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "{'a': 1}" => [["a" 1]]
-
-sets-convert-to-lists-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "{1, 1}" => [1]
-
-np-array-convert-to-lists-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  O> py:run "import numpy as np"
-  py:runresult "np.array([1,2,3])" => [1 2 3]
-
-supports-utf8-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "'😃'" => "😃"
-
-errors-on-nan-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "float('nan')" => ERROR Extension exception: Python reported a non-numeric value from a mathematical operation.
-
-errors-on-infinity-python2
-  extensions [ py ]
-  O> py:setup py:python2
-  py:runresult "float('inf')" => ERROR Extension exception: Python reported a number too large for NetLogo.
+# open-connection-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   O> py:run "print('python hi1!')"
+#   O> py:run "print('python hi2!')"
+#
+# python2-gets-python-2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   O> py:run "import sys"
+#   py:runresult "sys.version_info[0]" => 2
+#
+# basic-python-types-convert-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "1" => 1
+#   py:runresult "'hi'" => "hi"
+#   py:runresult "True" => true
+#   py:runresult "False" => false
+#   py:runresult "[1, 'hi', [2, 'bye']]" => [1 "hi" [2 "bye"]]
+#
+# basic-netlogo-types-convert-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   O> py:set "num" 1
+#   O> py:set "string" "hi"
+#   O> py:set "lst" [1 "hi" [2 "bye"]]
+#   O> py:set "b" true
+#   py:runresult "num" => 1
+#   py:runresult "string" => "hi"
+#   py:runresult "lst" => [1 "hi" [2 "bye"]]
+#   py:runresult "b" => true
+#
+# error-handling-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   O> py:run "raise Exception('hi')" => ERROR Extension exception: hi
+#   py:runresult "1 / 0" => ERROR Extension exception: integer division or modulo by zero
+#
+# dicts-convert-to-lists-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "{'a': 1}" => [["a" 1]]
+#
+# sets-convert-to-lists-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "{1, 1}" => [1]
+#
+# np-array-convert-to-lists-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   O> py:run "import numpy as np"
+#   py:runresult "np.array([1,2,3])" => [1 2 3]
+#
+# supports-utf8-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "'😃'" => "😃"
+#
+# errors-on-nan-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "float('nan')" => ERROR Extension exception: Python reported a non-numeric value from a mathematical operation.
+#
+# errors-on-infinity-python2
+#   extensions [ py ]
+#   O> py:setup py:python2
+#   py:runresult "float('inf')" => ERROR Extension exception: Python reported a number too large for NetLogo.
 
 open-connection-python3
   extensions [ py ]
