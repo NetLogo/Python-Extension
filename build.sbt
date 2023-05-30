@@ -2,7 +2,7 @@ import org.nlogo.build.{ NetLogoExtension, ExtensionDocumentationPlugin }
 
 enablePlugins(NetLogoExtension, ExtensionDocumentationPlugin)
 
-version    := "0.5.3"
+version    := "0.5.4"
 isSnapshot := true
 
 scalaVersion          := "2.12.12"
@@ -23,5 +23,5 @@ Compile / packageBin / artifactPath := {
 
 resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
-  "org.nlogo.languagelibrary" %% "language-library" % "2.0.0"
+  "org.nlogo.languagelibrary" %% "language-library" % "2.2.2"
 )
