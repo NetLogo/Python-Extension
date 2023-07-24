@@ -23,5 +23,5 @@ Compile / packageBin / artifactPath := {
 
 resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
-  "org.nlogo.languagelibrary" %% "language-library" % "2.2.2"
+  "org.nlogo.languagelibrary" %% "language-library" % "2.4.0"
 )
