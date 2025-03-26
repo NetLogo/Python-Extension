@@ -5,22 +5,24 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  LIBERICA_URL: https://download.bell-sw.com/java/17.0.5+8/bellsoft-jdk17.0.5+8-linux-amd64-full.tar.gz
-
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: olafurpg/setup-scala@v13
+      - uses: actions/setup-java@v4
         with:
-          java-version: liberica@17=tgz+${{ env.LIBERICA_URL }}
+          distribution: temurin
+          java-version: 17
+          java-package: jdk+fx
+          cache: sbt
 
-      - uses: actions/setup-python@v4
+      - uses: sbt/setup-sbt@v1
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install Python 3 libraries
         run: pip3 install numpy scikit-learn
