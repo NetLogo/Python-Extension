@@ -4,8 +4,8 @@ import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Paths
 
-import com.fasterxml.jackson.core.JsonParser
-import org.json4s.jackson.JsonMethods.mapper
+import com.fasterxml.jackson.core.json.JsonReadFeature
+import com.fasterxml.jackson.databind.json.JsonMapper
 
 import org.nlogo.languagelibrary.Subprocess.path
 import org.nlogo.languagelibrary.Subprocess
@@ -14,6 +14,8 @@ import org.nlogo.languagelibrary.config.{ Config, FileProperty, Menu, Platform }
 import org.nlogo.api
 import org.nlogo.api._
 import org.nlogo.core.{ LogoList, Syntax }
+
+import scala.collection.immutable.ArraySeq
 
 object PythonExtension {
   val codeName   = "py"
@@ -50,20 +52,20 @@ class PythonExtension extends api.DefaultClassManager {
     manager.addPrimitive("runresult", RunResult)
     manager.addPrimitive("set", Set)
     manager.addPrimitive("python2",
-      FindPython(PythonSubprocess.python2 _)
+      FindPython(() => PythonSubprocess.python2)
     )
     manager.addPrimitive("python3",
-      FindPython(PythonSubprocess.python3 _)
+      FindPython(() => PythonSubprocess.python3)
     )
     manager.addPrimitive("python",
-      FindPython(PythonSubprocess.anyPython _)
+      FindPython(() => PythonSubprocess.anyPython)
     )
     manager.addPrimitive("__path", Path)
   }
 
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
-    mapper.configure(JsonParser.Feature.ALLOW_NON_NUMERIC_NUMBERS, true)
+    JsonMapper.builder().configure(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
     val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
     val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
@@ -107,8 +109,8 @@ object PythonSubprocess {
 
   def anyPython: Option[File] = python3 orElse python2
 
-  def pythons: Stream[PythonBinary] =
-    path.toStream
+  def pythons: LazyList[PythonBinary] =
+    path.to(LazyList)
       .flatMap(_.listFiles((_, name) => name.toLowerCase.matches(raw"python[\d\.]*(?:\.exe)??")))
       .flatMap(PythonBinary.fromFile)
 }
@@ -120,7 +122,7 @@ object SetupPython extends api.Command {
 
   override def perform(args: Array[Argument], context: Context): Unit = {
     val pyExtensionDirectory = Config.getExtensionRuntimeDirectory(classOf[PythonExtension], PythonExtension.codeName)
-    val pythonCmd            = args.map(_.getString)
+    val pythonCmd            = ArraySeq.unsafeWrapArray(args.map(_.getString))
     val maybePyFile          = new File(pyExtensionDirectory, "pyext.py")
     val pyFile               = if (maybePyFile.exists) { maybePyFile } else { (new File("pyext.py")).getCanonicalFile }
     val pyScript: String     = pyFile.toString

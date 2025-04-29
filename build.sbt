@@ -8,9 +8,9 @@ isSnapshot := true
 scalaVersion          := "2.13.16"
 Test / scalaSource    := baseDirectory.value / "src" / "test"
 Compile / scalaSource := baseDirectory.value / "src" / "main"
-scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings", "-Xlint", "-release", "11")
+scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-quickfix:any", "-Xfatal-warnings", "-Xlint", "-release", "11")
 
-netLogoVersion       := "6.3.0"
+netLogoVersion       := "7.0.0-internal1"
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoExtName       := "py"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
@@ -23,5 +23,5 @@ Compile / packageBin / artifactPath := {
 
 resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
 libraryDependencies ++= Seq(
-  "org.nlogo.languagelibrary" %% "language-library" % "2.4.0"
+  "org.nlogo.languagelibrary" %% "language-library" % "3.0.0"
 )
