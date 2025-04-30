@@ -1,11 +1,14 @@
 package org.nlogo.extensions.py
 
+import com.fasterxml.jackson.core.json.JsonReadFeature
+import com.fasterxml.jackson.databind.json.JsonMapper
+import com.fasterxml.jackson.databind.ObjectMapper
+
 import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader }
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Paths
 
-import com.fasterxml.jackson.core.json.JsonReadFeature
-import com.fasterxml.jackson.databind.json.JsonMapper
+import org.json4s.jackson.{ JsonMethods, Json4sScalaModule }
 
 import org.nlogo.languagelibrary.Subprocess.path
 import org.nlogo.languagelibrary.Subprocess
@@ -65,7 +68,6 @@ class PythonExtension extends api.DefaultClassManager {
 
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
-    JsonMapper.builder().configure(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS, true)
 
     val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
     val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
@@ -127,7 +129,13 @@ object SetupPython extends api.Command {
     val pyFile               = if (maybePyFile.exists) { maybePyFile } else { (new File("pyext.py")).getCanonicalFile }
     val pyScript: String     = pyFile.toString
     try {
-      PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript), PythonExtension.codeName, PythonExtension.longName)
+      val mapper = new JsonMethods {
+        override def mapper: ObjectMapper =
+          JsonMapper.builder.addModule(new Json4sScalaModule).enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS).build()
+      }
+      PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript),
+                                                       PythonExtension.codeName, PythonExtension.longName,
+                                                       customMapper = Option(mapper))
       PythonExtension.menu.foreach(_.setup(PythonExtension.pythonProcess.evalStringified))
     } catch {
       case e: Exception =>
