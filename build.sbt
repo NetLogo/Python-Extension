@@ -5,12 +5,12 @@ enablePlugins(NetLogoExtension, ExtensionDocumentationPlugin)
 version    := "0.5.5"
 isSnapshot := true
 
-scalaVersion          := "2.13.16"
+scalaVersion          := "3.7.0"
 Test / scalaSource    := baseDirectory.value / "src" / "test"
 Compile / scalaSource := baseDirectory.value / "src" / "main"
-scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings", "-Xlint", "-release", "11")
+scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings", "-release", "11")
 
-netLogoVersion       := "7.0.0-internal1-df97144" // This extension gets its NL version from language-library; any update to its NL version has to be mirrored in that package and published in a new version --Jason B. (5/5/25)
+netLogoVersion       := "7.0.0-beta1" // This extension gets its NL version from language-library; any update to its NL version has to be mirrored in that package and published in a new version --Jason B. (5/5/25)
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoExtName       := "py"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
