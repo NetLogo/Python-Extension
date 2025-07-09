@@ -2,6 +2,7 @@ import org.nlogo.build.{ NetLogoExtension, ExtensionDocumentationPlugin }
 
 enablePlugins(NetLogoExtension, ExtensionDocumentationPlugin)
 
+name       := "py"
 version    := "0.5.5"
 isSnapshot := true
 
@@ -12,7 +13,6 @@ scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-
 
 netLogoVersion       := "7.0.0-beta1-c8d671e" // This extension gets its NL version from language-library; any update to its NL version has to be mirrored in that package and published in a new version --Jason B. (5/5/25)
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
-netLogoExtName       := "py"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
 Compile / packageBin / artifactPath := {
