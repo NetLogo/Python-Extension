@@ -12,11 +12,12 @@ import org.json4s.jackson.{ JsonMethods, Json4sScalaModule }
 
 import org.nlogo.languagelibrary.Subprocess.path
 import org.nlogo.languagelibrary.Subprocess
-import org.nlogo.languagelibrary.config.{ Config, FileProperty, Menu, Platform }
+import org.nlogo.languagelibrary.config.{ Config, ConfigProperty, FileProperty, Menu, Platform }
 
 import org.nlogo.api
 import org.nlogo.api._
 import org.nlogo.core.{ LogoList, Syntax }
+import org.nlogo.workspace.{ AbstractWorkspace, ExtensionManager => WorkspaceExtensionManager }
 
 import scala.collection.immutable.ArraySeq
 
@@ -69,9 +70,34 @@ class PythonExtension extends api.DefaultClassManager {
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
 
-    val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
-    val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
-    PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
+    em.asInstanceOf[WorkspaceExtensionManager].workspace.asInstanceOf[AbstractWorkspace].isHeadless
+
+    val headless: Boolean = em match {
+      case wem: WorkspaceExtensionManager =>
+        wem.workspace match {
+          case aw: AbstractWorkspace if aw.isHeadless =>
+            true
+
+          case _ =>
+            false
+        }
+
+      case _ =>
+        false
+    }
+
+    val extraProperties: Seq[ConfigProperty] = {
+      if (headless) {
+        Seq()
+      } else {
+        val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
+        val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
+
+        Seq(py2Property)
+      }
+    }
+
+    PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, extraProperties)
   }
 
   override def unload(em: ExtensionManager): Unit = {
