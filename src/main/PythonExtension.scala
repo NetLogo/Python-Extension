@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.ObjectMapper
 
+import java.awt.GraphicsEnvironment
 import java.io.{ BufferedReader, Closeable, File, IOException, InputStreamReader }
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Paths
@@ -31,6 +32,8 @@ object PythonExtension {
   var menu: Option[Menu] = None
   val config: Config     = Config.createForPropertyFile(classOf[PythonExtension], PythonExtension.codeName)
 
+  var headless = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
+
   def pythonProcess: Subprocess = {
     _pythonProcess.getOrElse(throw new ExtensionException(
       "Python process has not been started. Please run PY:SETUP before any other python extension primitive."))
@@ -49,7 +52,6 @@ object PythonExtension {
 }
 
 class PythonExtension extends api.DefaultClassManager {
-
   override def load(manager: api.PrimitiveManager): Unit = {
     manager.addPrimitive("setup", SetupPython)
     manager.addPrimitive("run", Run)
@@ -70,9 +72,7 @@ class PythonExtension extends api.DefaultClassManager {
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
 
-    em.asInstanceOf[WorkspaceExtensionManager].workspace.asInstanceOf[AbstractWorkspace].isHeadless
-
-    val headless: Boolean = em match {
+    PythonExtension.headless = PythonExtension.headless | (em match {
       case wem: WorkspaceExtensionManager =>
         wem.workspace match {
           case aw: AbstractWorkspace if aw.isHeadless =>
@@ -84,26 +84,25 @@ class PythonExtension extends api.DefaultClassManager {
 
       case _ =>
         false
+    })
+
+    if (!PythonExtension.headless) {
+      println(GraphicsEnvironment.isHeadless)
+      println(System.getProperty("org.nlogo.preferHeadless"))
+
+      val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
+      val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
+
+      PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
     }
-
-    val extraProperties: Seq[ConfigProperty] = {
-      if (headless) {
-        Seq()
-      } else {
-        val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
-        val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
-
-        Seq(py2Property)
-      }
-    }
-
-    PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, extraProperties)
   }
 
   override def unload(em: ExtensionManager): Unit = {
     super.unload(em)
     PythonExtension.killPython()
-    PythonExtension.menu.foreach(_.unload())
+
+    if (!PythonExtension.headless)
+      PythonExtension.menu.foreach(_.unload())
   }
 
 }
@@ -162,7 +161,9 @@ object SetupPython extends api.Command {
       PythonExtension.pythonProcess = Subprocess.start(context.workspace, pythonCmd, Seq(pyScript),
                                                        PythonExtension.codeName, PythonExtension.longName,
                                                        customMapper = Option(mapper))
-      PythonExtension.menu.foreach(_.setup(PythonExtension.pythonProcess.evalStringified))
+
+      if (!PythonExtension.headless)
+        PythonExtension.menu.foreach(_.setup(PythonExtension.pythonProcess.evalStringified))
     } catch {
       case e: Exception =>
         // Different errors can manifest in different operating systems. Thus, rather than dispatching in the specific
