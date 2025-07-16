@@ -87,12 +87,8 @@ class PythonExtension extends api.DefaultClassManager {
     })
 
     if (!PythonExtension.headless) {
-      println(GraphicsEnvironment.isHeadless)
-      println(System.getProperty("org.nlogo.preferHeadless"))
-
       val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
       val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
-
       PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
     }
   }
