@@ -3,7 +3,7 @@ import org.nlogo.build.{ NetLogoExtension, ExtensionDocumentationPlugin }
 enablePlugins(NetLogoExtension, ExtensionDocumentationPlugin)
 
 name       := "py"
-version    := "0.5.5"
+version    := "1.0.0"
 isSnapshot := true
 
 scalaVersion          := "3.7.0"
