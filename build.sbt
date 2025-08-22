@@ -11,7 +11,7 @@ Test / scalaSource    := baseDirectory.value / "src" / "test"
 Compile / scalaSource := baseDirectory.value / "src" / "main"
 scalacOptions        ++= Seq("-unchecked", "-deprecation", "-feature", "-Xfatal-warnings", "-release", "11")
 
-netLogoVersion       := "7.0.0-beta2-8cd3e65" // This extension gets its NL version from language-library; any update to its NL version has to be mirrored in that package and published in a new version --Jason B. (5/5/25)
+netLogoVersion       := "7.0.0-beta2-7e8f7a4" // This extension gets its NL version from language-library; any update to its NL version has to be mirrored in that package and published in a new version --Jason B. (5/5/25)
 netLogoClassManager  := "org.nlogo.extensions.py.PythonExtension"
 netLogoPackageExtras += (baseDirectory.value / "src" / "pyext.py", None)
 
