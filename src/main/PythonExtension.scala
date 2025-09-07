@@ -13,26 +13,26 @@ import org.json4s.jackson.{ JsonMethods, Json4sScalaModule }
 
 import org.nlogo.languagelibrary.Subprocess.path
 import org.nlogo.languagelibrary.Subprocess
-import org.nlogo.languagelibrary.config.{ Config, ConfigProperty, FileProperty, Menu, Platform }
+import org.nlogo.languagelibrary.config.{ Config, ConfigProperty, FileProperty, Menu }
 
 import org.nlogo.api
 import org.nlogo.api._
 import org.nlogo.core.{ LogoList, Syntax }
-import org.nlogo.workspace.{ AbstractWorkspace, ExtensionManager => WorkspaceExtensionManager }
+import org.nlogo.workspace.AbstractWorkspace
 
 import scala.collection.immutable.ArraySeq
 
 object PythonExtension {
   val codeName   = "py"
   val longName   = "Python"
-  val extLangBin = if (Platform.isWindows) { "python" } else { "python3" }
+  val extLangBin = if (System.getProperty("os.name").toLowerCase.startsWith("win")) { "python" } else { "python3" }
 
   private var _pythonProcess: Option[Subprocess] = None
 
   var menu: Option[Menu] = None
   val config: Config     = Config.createForPropertyFile(classOf[PythonExtension], PythonExtension.codeName)
 
-  var headless = GraphicsEnvironment.isHeadless || System.getProperty("org.nlogo.preferHeadless") == "true"
+  var isHeadless = true
 
   def pythonProcess: Subprocess = {
     _pythonProcess.getOrElse(throw new ExtensionException(
@@ -72,21 +72,9 @@ class PythonExtension extends api.DefaultClassManager {
   override def runOnce(em: ExtensionManager): Unit = {
     super.runOnce(em)
 
-    PythonExtension.headless = PythonExtension.headless | (em match {
-      case wem: WorkspaceExtensionManager =>
-        wem.workspace match {
-          case aw: AbstractWorkspace if aw.isHeadless =>
-            true
+    PythonExtension.isHeadless = !em.workspaceContext.workspaceGUI
 
-          case _ =>
-            false
-        }
-
-      case _ =>
-        false
-    })
-
-    if (!PythonExtension.headless) {
+    if (!PythonExtension.isHeadless) {
       val py2Message  = s"It is recommended to use Python 3 if possible and enter its path above.  If you must use Python 2, enter the path to its executable folder below."
       val py2Property = new FileProperty("python2", "python2", PythonExtension.config.get("python2").getOrElse(""), py2Message)
       PythonExtension.menu = Menu.create(em, PythonExtension.longName, PythonExtension.extLangBin, PythonExtension.config, Seq(py2Property))
@@ -97,7 +85,7 @@ class PythonExtension extends api.DefaultClassManager {
     super.unload(em)
     PythonExtension.killPython()
 
-    if (!PythonExtension.headless)
+    if (!PythonExtension.isHeadless)
       PythonExtension.menu.foreach(_.unload())
   }
 
@@ -114,7 +102,7 @@ object Using {
 object PythonSubprocess {
   def python2: Option[File] = {
     val maybePy2File = PythonExtension.config.get("python2").map( (dir) => {
-      val bin  = if (Platform.isWindows) { "python.exe" } else { "python2" }
+      val bin  = if (System.getProperty("os.name").toLowerCase.startsWith("win")) { "python.exe" } else { "python2" }
       val path = Paths.get(dir, bin)
       new File(path.toString)
     })
@@ -158,7 +146,7 @@ object SetupPython extends api.Command {
                                                        PythonExtension.codeName, PythonExtension.longName,
                                                        customMapper = Option(mapper))
 
-      if (!PythonExtension.headless)
+      if (!PythonExtension.isHeadless)
         PythonExtension.menu.foreach(_.setup(PythonExtension.pythonProcess.evalStringified))
     } catch {
       case e: Exception =>
