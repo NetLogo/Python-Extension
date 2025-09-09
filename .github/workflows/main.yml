@@ -2,28 +2,29 @@ name: build-and-test
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
-
-env:
-  LIBERICA_URL: https://download.bell-sw.com/java/17.0.5+8/bellsoft-jdk17.0.5+8-linux-amd64-full.tar.gz
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: olafurpg/setup-scala@v13
+      - uses: actions/setup-java@v5
         with:
-          java-version: liberica@17=tgz+${{ env.LIBERICA_URL }}
+          distribution: zulu
+          java-version: 21.0.2
+          java-package: jdk+fx
+          cache: sbt
 
-      - uses: actions/setup-python@v4
+      - uses: sbt/setup-sbt@v1
+
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install Python 3 libraries
         run: pip3 install numpy scikit-learn
 
-      - run: sbt -v update compile
-      - run: sbt -v test
+      - name: Build and Test
+        run: |
+          sbt -v update compile
+          sbt -v test
