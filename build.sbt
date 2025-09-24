@@ -21,7 +21,11 @@ Compile / packageBin / artifactPath := {
   newPath.toFile
 }
 
-resolvers           += "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven"
+resolvers ++= Seq(
+  "netlogo-language-library" at "https://dl.cloudsmith.io/public/netlogo/language-library/maven",
+  "jitpack" at "https://jitpack.io"
+)
+
 libraryDependencies ++= Seq(
   "org.nlogo.languagelibrary" %% "language-library" % "3.3.1"
 )
