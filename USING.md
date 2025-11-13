@@ -35,9 +35,9 @@ observer> py:run "print(min(patch_xs))"
 See the documentation for each of the particular primitives for details on, for instance, how to multi-line statements and how object type conversions work.
 See the demo models included in the `demo` folder for some examples of using libraries such as `numpy` and `tensorflow`.
 
-See the documentation on `py:set` to learn how to have the extension serialize entire agents and agentsets into Python dictionaries. 
+See the documentation on `py:set` to learn how to have the extension serialize entire agents and agentsets into Python dictionaries.
 
-There is also a separate interactive Python console that can be found under Python > Interactive Python Console. 
+There is also a separate interactive Python console that can be found under Python > Interactive Python Console.
 This console is connected to the same Python session as all the Python NetLogo primitives, so you can define a variable in your model and access it in the interactive Python console window.
 
 ### Error handling
